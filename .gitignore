@@ -1,0 +1,28 @@
+# Node modules (frontend & backend)
+frontend/node_modules/
+backend/node_modules/
+
+# Environment files
+.env
+*/.env
+
+# Logs
+logs
+*.log
+
+# Next.js build output
+frontend/.next/
+frontend/out/
+
+# Backend (if TypeScript)
+backend/dist/
+
+# Prisma
+backend/prisma/dev.db
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
