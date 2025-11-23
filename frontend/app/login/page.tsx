@@ -9,35 +9,43 @@ import SocialIcons from "@/components/social-icons";
 import Logo from "@/components/logo";
 
 export default function LoginPage() {
-    const [username, setUsername] = useState("");
+    const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [loading, setLoading] = useState(false);
 
-    const validatePassword = (pwd: string) => {
-        if (pwd.length < 8) return "Password must be at least 8 characters";
-        if (!/[A-Z]/.test(pwd)) return "Password must contain at least one uppercase letter";
-        if (!/[a-z]/.test(pwd)) return "Password must contain at least one lowercase letter";
-        if (!/[0-9]/.test(pwd)) return "Password must contain at least one number";
-        if (!/[!@#$%^&*(),.?":{}|<>]/.test(pwd)) return "Password must contain at least one special character";
-        return null;
-    };
-
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (!username || !password) {
-            toast.error("Please enter both username and password");
+        if (!email || !password) {
+            toast.error("Please enter both email and password");
             return;
         }
 
-        const passwordError = validatePassword(password);
-        if (passwordError) {
-            toast.error(passwordError);
-            return;
-        }
+        setLoading(true);
 
-        // Proceed with login logic
-        toast.success("Logged in successfully!");
-        console.log("Logging in with:", { username, password });
+        try {
+            const res = await fetch("http://localhost:5000/api/auth/login", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({email, password}),
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) {
+                throw new Error(data.message || "Login failed");
+            }
+
+            localStorage.setItem("token", data.token);
+            toast.success("Logged in successfully!");
+            console.log("User data:", data.user);
+        } catch (error: any) {
+            toast.error(error.message);
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -53,10 +61,10 @@ export default function LoginPage() {
                         </p>
                         <form className="space-y-4" onSubmit={handleSubmit}>
                             <InputField
-                                placeholder="Username"
+                                placeholder="Email"
                                 type="text"
-                                value={username}
-                                onChange={(e) => setUsername(e.target.value)}
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
                             />
                             <InputField
                                 placeholder="Password"
@@ -69,9 +77,8 @@ export default function LoginPage() {
                                     Forgot Password?
                                 </a>
                             </div>
-                            <Button text="Login"/>
+                            <Button text={loading ? "Logging in..." : "Login"} />
                         </form>
-
                         <div className="my-5 flex items-center">
                             <div className="flex-1 border-t border-gray-300"></div>
                             <span className="px-3 text-xs text-gray-500">Or Sign Up With</span>
