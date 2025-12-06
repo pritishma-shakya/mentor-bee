@@ -2,7 +2,7 @@ import { Response } from "express";
 import bcrypt from "bcryptjs";
 import { pgPool } from "../config/database";
 import { generateToken } from "../utils/generateToken";
-import { AuthRequest } from "../middlewares/authMiddleware"; // Import from correct file
+import { AuthRequest } from "../middlewares/authMiddleware"; 
 
 export const signup = async (req: AuthRequest, res: Response) => {
   const { email, password, name } = req.body;
