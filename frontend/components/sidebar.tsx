@@ -1,14 +1,29 @@
-import { Home, Calendar, MessageCircle, Users, Trophy, Settings, LogOut, Compass } from "lucide-react";
+"use client";
+
+import { useRouter, usePathname } from "next/navigation";
+import {
+  Home,
+  Calendar,
+  MessageCircle,
+  Users,
+  Trophy,
+  Settings,
+  LogOut,
+  Compass,
+} from "lucide-react";
 
 export default function Sidebar() {
+  const router = useRouter();
+  const pathname = usePathname();
+
   const navItems = [
-    { icon: Home, label: "Home", active: true },
-    { icon: Compass, label: "Explore" },
-    { icon: Calendar, label: "My Sessions" },
-    { icon: MessageCircle, label: "Messages" },
-    { icon: Users, label: "My Community" },
-    { icon: Trophy, label: "Rewards" },
-    { icon: Settings, label: "Settings" },
+    { icon: Home, label: "Home", path: "/home" },
+    { icon: Compass, label: "Explore", path: "/explore" },
+    { icon: Calendar, label: "My Sessions", path: "/sessions" },
+    { icon: MessageCircle, label: "Messages", path: "/messages" },
+    { icon: Users, label: "My Community", path: "/community" },
+    { icon: Trophy, label: "Rewards", path: "/rewards" },
+    { icon: Settings, label: "Settings", path: "/settings" },
   ];
 
   return (
@@ -22,18 +37,29 @@ export default function Sidebar() {
       />
 
       <nav className="space-y-2">
-        {navItems.map((item) => (
-          <button
-            key={item.label}
-            className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg text-[13px] font-medium transition 
-              ${item.active ? "bg-orange-50 text-orange-600" : "text-gray-700 hover:bg-gray-100"}`}
-            aria-current={item.active ? "page" : undefined}
-          >
-            <item.icon className="w-4 h-4" /> {item.label}
-          </button>
-        ))}
+        {navItems.map((item) => {
+          const isActive = pathname === item.path;
 
-        <button className="w-full flex items-center gap-3 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg mt-5 text-[13px] font-medium">
+          return (
+            <button
+              key={item.label}
+              onClick={() => router.push(item.path)}
+              className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg text-[13px] font-medium transition 
+                ${isActive 
+                  ? "bg-orange-50 text-orange-600 border border-orange-200" 
+                  : "text-gray-700 hover:bg-gray-100"
+                }`}
+            >
+              <item.icon className="w-4 h-4" />
+              {item.label}
+            </button>
+          );
+        })}
+
+        <button
+          onClick={() => router.push("/logout")}
+          className="w-full flex items-center gap-3 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg mt-5 text-[13px] font-medium"
+        >
           <LogOut className="w-4 h-4" /> Logout
         </button>
       </nav>
