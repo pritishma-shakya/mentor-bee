@@ -1,8 +1,9 @@
-import { Home, Calendar, MessageCircle, Users, Trophy, Settings, LogOut} from "lucide-react";
+import { Home, Calendar, MessageCircle, Users, Trophy, Settings, LogOut, Compass } from "lucide-react";
 
 export default function Sidebar() {
   const navItems = [
     { icon: Home, label: "Home", active: true },
+    { icon: Compass, label: "Explore" },
     { icon: Calendar, label: "My Sessions" },
     { icon: MessageCircle, label: "Messages" },
     { icon: Users, label: "My Community" },
@@ -17,7 +18,8 @@ export default function Sidebar() {
         width={70}
         height={40}
         className="mx-2 mb-8"
-        alt="MentorBee logo"/>
+        alt="MentorBee logo"
+      />
 
       <nav className="space-y-2">
         {navItems.map((item) => (
