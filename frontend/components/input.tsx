@@ -1,8 +1,10 @@
 interface InputFieldProps {
-    placeholder: string;
-    type: string;
-    value: string;
-    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  placeholder: string;
+  type: string;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onFocus?: () => void;
+  onBlur?: () => void;
 }
 
 export default function InputField({ placeholder, type, value, onChange }: InputFieldProps) {

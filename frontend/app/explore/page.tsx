@@ -1,20 +1,76 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import toast, { Toaster } from "react-hot-toast";
 import Sidebar from "@/components/sidebar";
 import MentorCard from "@/components/mentor-card";
+import HeaderBar from "@/components/header-bar";
 import { Search, Bell, User, Star, Clock, Calendar, ChevronDown } from "lucide-react";
+
+interface Mentor {
+  id: string;
+  full_name: string;
+  expertise: { id: string; name: string }[];
+  hourly_rate: string;
+  rating?: number;
+  tags?: string[];
+}
+
+interface UserProps {
+  id: string;
+  name: string;
+  email: string;
+  role: "student" | "mentor";
+  profile_picture?: string;
+}
 
 export default function ExplorePage() {
   const [activeTab, setActiveTab] = useState<"mentors" | "courses" | "groups">("mentors");
   const [searchQuery, setSearchQuery] = useState("");
+  const [mentors, setMentors] = useState<Mentor[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<UserProps | null>(null);
 
-  const mentors = [
-    { name: "Sarah Johnson", expertise: "Web Development", rating: 4.9, tags: ["React", "Next.js"], price: 15 },
-    { name: "Michael Lee", expertise: "Cloud Computing", rating: 4.8, tags: ["AWS", "Kubernetes"], price: 25 },
-    { name: "Emily Davis", expertise: "Data Science", rating: 4.7, tags: ["Pandas", "ML"], price: 22 },
-    { name: "Alex Chen", expertise: "UI/UX Design", rating: 5.0, tags: ["Figma", "Design Systems"], price: 30 },
-  ];
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+
+    const headers: Record<string, string> = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
+    // Fetch user profile
+    if (token) {
+      fetch("http://localhost:5000/api/auth/profile", { headers })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) setUser(data.data.user);
+        })
+        .catch(err => {
+          console.error(err);
+          toast.error("Failed to fetch user info");
+        });
+    }
+
+    // Fetch mentors
+    fetch("http://localhost:5000/api/mentors", { headers })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && Array.isArray(data.data)) {
+          const normalized = data.data.map((m: any) => ({
+            ...m,
+            rating: 4.8, // placeholder rating
+            tags: m.expertise.map((e: any) => e.name),
+          }));
+          setMentors(normalized);
+        } else {
+          toast.error("Failed to fetch mentors");
+        }
+      })
+      .catch(err => {
+        console.error(err);
+        toast.error("Failed to fetch mentors");
+      })
+      .finally(() => setLoading(false));
+  }, []);
 
   const courses = [
     { title: "React Mastery 2025", mentor: "Sarah Johnson", duration: "6h 30m", rating: 4.9, lessons: 12, level: "Intermediate", updated: "Oct 25, 2025" },
@@ -28,38 +84,18 @@ export default function ExplorePage() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
+      <Toaster position="top-right" />
       <Sidebar />
 
       <main className="flex-1 ml-64 px-6 py-4 max-w-7xl mx-auto">
-        <header className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-xl font-semibold text-gray-900">Explore</h1>
-            <p className="text-gray-600 mt-0.5 text-sm">Find your next mentor, course, or group session</p>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
-              <input
-                type="text"
-                placeholder="Search mentors, courses, skills..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 pr-3 py-2 w-80 bg-white rounded-full shadow-sm border border-gray-200 
-                          focus:border-orange-400 focus:outline-none text-sm placeholder-gray-500"
-              />
-            </div>
-
-            <button className="relative p-1.5 hover:bg-gray-200 rounded-full transition" aria-label="Notifications">
-              <Bell className="w-4 h-4 text-gray-800" />
-              <span className="absolute top-0.5 right-0.5 w-2 h-2 bg-red-500 rounded-full" />
-            </button>
-
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center overflow-hidden">
-              <User className="w-4 h-4 text-white" />
-            </div>
-          </div>
-        </header>
+        <HeaderBar
+          user={user}
+          title="Explore"
+          subtitle="Find your next mentor, course, or group session"
+          showSearch={true}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+        />
 
         {/* Tabs */}
         <div className="flex items-center gap-6 border-b border-gray-200 mb-5">
@@ -72,11 +108,14 @@ export default function ExplorePage() {
               }`}
             >
               {tab === "mentors" ? "Mentors" : tab === "courses" ? "Courses" : "Group Sessions"}
-              {activeTab === tab && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-orange-500 rounded-full" />}
+              {activeTab === tab && (
+                <span className="absolute bottom-0 left-0 w-full h-0.5 bg-orange-500 rounded-full" />
+              )}
             </button>
           ))}
         </div>
 
+        {/* Filters */}
         <div className="flex flex-wrap items-center gap-4 mt-4">
           <div className="relative">
             <select className="appearance-none px-5 py-3 pr-12 bg-white border border-gray-300 rounded-xl text-gray-800 font-medium text-sm shadow-sm hover:border-gray-400 focus:border-orange-400 focus:outline-none transition cursor-pointer">
@@ -110,76 +149,68 @@ export default function ExplorePage() {
           </button>
         </div>
 
+        {/* Content Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mt-6">
-          {activeTab === "mentors" && mentors.map((mentor, i) => <MentorCard key={i} mentor={mentor} />)}
+          {activeTab === "mentors" && (
+            loading ? <p className="text-gray-500">Loading mentors...</p> :
+            mentors.map((m, i) => (
+              <MentorCard 
+                key={m.id} 
+                mentor={{ 
+                  id: m.id,   // <-- add this
+                  name: m.full_name, 
+                  expertise: m.expertise.map(e => e.name).join(", "), 
+                  rating: m.rating || 4.8, 
+                  tags: m.tags || [], 
+                  price: parseFloat(m.hourly_rate) 
+                }} 
+              />
+            ))
+          )}
 
-          {activeTab === "courses" &&
-            courses.map((course, i) => (
-              <div
-                key={i}
-                className="bg-white rounded-2xl overflow-hidden border border-gray-200 shadow-sm hover:shadow-md transition cursor-pointer"
-              >
-                <div className="w-full h-28 bg-gray-200" />
-
-                <div className="p-4">
-                  <div className="flex justify-between items-start">
-                    <h3 className="font-semibold text-gray-900 text-base">{course.title}</h3>
-                    <div className="flex items-center gap-1 text-orange-500">
-                      <Star className="w-4 h-4 fill-current" />
-                      <span className="font-semibold text-sm">{course.rating}</span>
-                    </div>
-                  </div>
-
-                  <p className="text-gray-600 text-sm mt-0.5">by {course.mentor}</p>
-
-                  <div className="flex flex-wrap gap-3 mt-3 text-sm text-gray-700">
-                    <div className="flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5" /> {course.duration}
-                    </div>
-                    <div className="flex items-center gap-1">📘 {course.lessons} lessons</div>
-                    <div className="flex items-center gap-1">🔥 {course.level}</div>
-                  </div>
-
-                  <p className="text-xs text-gray-500 mt-2">Updated {course.updated}</p>
-
-                  <button className="mt-4 w-full py-2 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-xl transition">
-                    Enroll Now
-                  </button>
-                </div>
-              </div>
-            ))}
-
-          {activeTab === "groups" &&
-            groupSessions.map((session, i) => (
-              <div
-                key={i}
-                className="bg-white rounded-2xl overflow-hidden border border-gray-200 shadow-sm hover:shadow-md transition cursor-pointer"
-              >
-                <div className="w-full h-28 bg-purple-200" />
-
-                <div className="p-4">
-                  <div className="flex justify-between items-start">
-                    <h3 className="font-semibold text-gray-900 text-base">{session.title}</h3>
-                    <span className="px-2 py-0.5 text-xs font-bold bg-purple-100 text-purple-700 rounded-full">Live</span>
-                  </div>
-
-                  <p className="text-gray-600 text-sm mt-0.5">with {session.mentor}</p>
-
-                  <div className="flex items-center gap-2 mt-3 text-gray-700 text-sm">
-                    <Calendar className="w-4 h-4" /> {session.date}
-                  </div>
-
-                  <div className="flex items-center gap-2 text-gray-700 text-sm">⏰ {session.time}</div>
-
-                  <div className="flex justify-between items-center mt-4">
-                    <span className="text-lg font-bold text-purple-600">${session.price}</span>
-                    <button className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-xl transition">
-                      Join Session
-                    </button>
+          {/* Courses */}
+          {activeTab === "courses" && courses.map((course, i) => (
+            <div key={i} className="bg-white rounded-2xl overflow-hidden border border-gray-200 shadow-sm hover:shadow-md transition cursor-pointer">
+              <div className="w-full h-28 bg-gray-200" />
+              <div className="p-4">
+                <div className="flex justify-between items-start">
+                  <h3 className="font-semibold text-gray-900 text-base">{course.title}</h3>
+                  <div className="flex items-center gap-1 text-orange-500">
+                    <Star className="w-4 h-4 fill-current" />
+                    <span className="font-semibold text-sm">{course.rating}</span>
                   </div>
                 </div>
+                <p className="text-gray-600 text-sm mt-0.5">by {course.mentor}</p>
+                <div className="flex flex-wrap gap-3 mt-3 text-sm text-gray-700">
+                  <div className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {course.duration}</div>
+                  <div className="flex items-center gap-1">📘 {course.lessons} lessons</div>
+                  <div className="flex items-center gap-1">🔥 {course.level}</div>
+                </div>
+                <p className="text-xs text-gray-500 mt-2">Updated {course.updated}</p>
+                <button className="mt-4 w-full py-2 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-xl transition">Enroll Now</button>
               </div>
-            ))}
+            </div>
+          ))}
+
+          {/* Group Sessions */}
+          {activeTab === "groups" && groupSessions.map((session, i) => (
+            <div key={i} className="bg-white rounded-2xl overflow-hidden border border-gray-200 shadow-sm hover:shadow-md transition cursor-pointer">
+              <div className="w-full h-28 bg-purple-200" />
+              <div className="p-4">
+                <div className="flex justify-between items-start">
+                  <h3 className="font-semibold text-gray-900 text-base">{session.title}</h3>
+                  <span className="px-2 py-0.5 text-xs font-bold bg-purple-100 text-purple-700 rounded-full">Live</span>
+                </div>
+                <p className="text-gray-600 text-sm mt-0.5">with {session.mentor}</p>
+                <div className="flex items-center gap-2 mt-3 text-gray-700 text-sm"><Calendar className="w-4 h-4" /> {session.date}</div>
+                <div className="flex items-center gap-2 text-gray-700 text-sm">⏰ {session.time}</div>
+                <div className="flex justify-between items-center mt-4">
+                  <span className="text-lg font-bold text-purple-600">${session.price}</span>
+                  <button className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-xl transition">Join Session</button>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </main>
     </div>

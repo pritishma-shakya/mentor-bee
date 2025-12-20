@@ -133,7 +133,7 @@ export default function SessionCard({ session }: { session: Session }) {
           <div className="flex gap-2 flex-wrap pt-2">
             <button className="flex-1 py-2 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-lg text-sm flex items-center justify-center gap-1">
               <Video className="w-4 h-4" />
-              Join Session
+              Start Session
             </button>
 
             <button className="px-4 py-2 border border-gray-300 rounded-lg font-medium text-sm text-gray-800 flex items-center gap-1">
@@ -156,7 +156,7 @@ export default function SessionCard({ session }: { session: Session }) {
         <div className="flex gap-2 flex-wrap mt-4">
           <button className="px-4 py-1.5 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-lg text-xs flex items-center gap-1">
             <Video className="w-3.5 h-3.5" />
-            Join
+            Start Session
           </button>
 
           <button className="px-4 py-1.5 border border-gray-300 rounded-lg font-medium text-xs text-gray-800 flex items-center gap-1">

@@ -1,13 +1,40 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Trophy, Gift, Crown, Medal, Zap, Coffee, Calendar, Sunrise } from "lucide-react";
-import { Bell, User } from "lucide-react";
 import Sidebar from "@/components/sidebar";
+import HeaderBar from "@/components/header-bar";
+
+interface Badge {
+  name: string;
+  icon: any;
+  points: number;
+  color: string;
+  bg: string;
+  border: string;
+}
+
+interface Activity {
+  date: string;
+  desc: string;
+  points: string;
+}
+
+interface UserProps {
+  id: string;
+  name: string;
+  email: string;
+  role: "student" | "mentor";
+  profile_picture?: string;
+}
 
 export default function RewardsPage() {
-  const totalPoints = 1250;
+  const [totalPoints, setTotalPoints] = useState(0);
+  const [recentActivities, setRecentActivities] = useState<Activity[]>([]);
+  const [user, setUser] = useState<UserProps | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const badgeThresholds = [
+  const badgeThresholds: Badge[] = [
     { name: "New Bee", icon: Gift, points: 500, color: "text-green-600", bg: "bg-green-100", border: "border-green-200" },
     { name: "Busy Bee", icon: Trophy, points: 1000, color: "text-orange-600", bg: "bg-orange-100", border: "border-orange-200" },
     { name: "Early Bird", icon: Sunrise, points: 1500, color: "text-purple-600", bg: "bg-purple-100", border: "border-purple-200" },
@@ -18,6 +45,37 @@ export default function RewardsPage() {
     { name: "Weekend Warrior", icon: Calendar, points: 5000, color: "text-indigo-600", bg: "bg-indigo-100", border: "border-indigo-200" },
   ];
 
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) return setLoading(false);
+
+    const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+
+    const fetchData = async () => {
+      try {
+        // Fetch user profile
+        const userRes = await fetch("http://localhost:5000/api/auth/profile", { headers });
+        const userData = await userRes.json();
+        if (userData.success) setUser(userData.data.user);
+
+        // Fetch rewards
+        const rewardsRes = await fetch("http://localhost:5000/api/students/rewards", { headers });
+        const rewardsData = await rewardsRes.json();
+        if (rewardsData.success) {
+          setTotalPoints(rewardsData.data.points || 0);
+          setRecentActivities(rewardsData.data.recentActivities || []);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  // Compute badges
   const badges = badgeThresholds.map((b, i) => {
     const prevPoints = badgeThresholds[i - 1]?.points || 0;
     const earned = totalPoints >= b.points;
@@ -28,34 +86,20 @@ export default function RewardsPage() {
   const currentBadge = badges.filter(b => b.earned).slice(-1)[0];
   const nextBadge = badges.find(b => !b.earned) || badges[badges.length - 1];
 
-  const recentActivities = [
-    { date: "Today, 10:30 AM", desc: "Completed a mentor session with Dr. Sarah Chen", points: "+50" },
-    { date: "Yesterday, 2:15 PM", desc: "Booked a session with Dr. Sarah Chen", points: "+25" },
-  ];
+  if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
       <Sidebar />
-
       <main className="flex-1 ml-60 px-6 py-5 max-w-7xl mx-auto">
-\        <header className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-lg font-semibold text-gray-900">Rewards & Achievements</h1>
-            <p className="text-gray-600 mt-1 text-sm">Earn points and unlock badges as you progress!</p>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <button className="relative p-1.5 hover:bg-gray-100 rounded-full transition">
-              <Bell className="w-4 h-4 text-gray-800" />
-              <span className="absolute top-0.5 right-0.5 w-2 h-2 bg-red-500 rounded-full" />
-            </button>
-            <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center overflow-hidden">
-              <User className="w-4 h-4 text-white" />
-            </div>
-          </div>
-        </header>
-
+        <HeaderBar 
+          user={user} 
+          title="Rewards & Achievements" 
+          subtitle="Earn points and unlock badges as you progress!" 
+        />
+        {/* Main Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left: Total points, progress, badges */}
           <div className="lg:col-span-2 space-y-6">
             <div className="bg-white rounded-xl p-6 shadow-md border border-gray-100 hover:shadow-lg transition">
               <div className="text-center mb-6">
@@ -63,6 +107,7 @@ export default function RewardsPage() {
                 <p className="text-gray-600 text-sm mt-1">Total Points</p>
               </div>
 
+              {/* Progress to next badge */}
               <div className="mb-6">
                 <div className="flex justify-between items-center text-sm text-gray-600 mb-2">
                   <span className="font-medium">Progress to {nextBadge.name}</span>
@@ -73,11 +118,9 @@ export default function RewardsPage() {
                        style={{ width: `${Math.max(0, Math.min(100, ((totalPoints - (currentBadge?.points || 0)) / (nextBadge.points - (currentBadge?.points || 0))) * 100))}%` }}
                   />
                 </div>
-                <div className="flex justify-end text-xs text-gray-500 mt-1">
-                  <span>{nextBadge.points.toLocaleString()} pts</span>
-                </div>
               </div>
 
+              {/* Recent Activities */}
               <div>
                 <h3 className="text-md font-semibold text-gray-900 mb-3">Recent Activities</h3>
                 <div className="space-y-3">
@@ -98,12 +141,12 @@ export default function RewardsPage() {
                 </div>
               </div>
 
+              {/* Badge Journey */}
               <div className="mt-6">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-lg font-semibold text-gray-900">Badge Journey</h3>
                   <p className="text-gray-600 text-sm">{badges.filter(b => b.earned).length}/{badges.length} unlocked</p>
                 </div>
-
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {badges.map((b, i) => (
                     <div key={i} className={`flex flex-col items-center p-4 rounded-xl border transition-all duration-300 transform hover:scale-[1.02] ${b.earned ? `${b.bg} ${b.border} shadow-sm` : 'bg-white border-gray-200 opacity-80'}`}>
@@ -129,6 +172,7 @@ export default function RewardsPage() {
             </div>
           </div>
 
+          {/* Right: Current Badge & How to Earn Points */}
           <div className="space-y-6">
             {currentBadge && (
               <div className="bg-gradient-to-br from-white to-gray-50 rounded-xl p-5 shadow-md border border-gray-100 hover:shadow-lg transition text-center">

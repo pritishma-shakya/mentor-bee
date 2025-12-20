@@ -1,12 +1,46 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Sidebar from "@/components/sidebar";
-import { Bell, User } from "lucide-react";
+import HeaderBar from "@/components/header-bar";
 import SessionCard from "@/components/session-card";
 
 export default function SessionsPage() {
   const [activeTab, setActiveTab] = useState("Upcoming");
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${token}`,
+    };
+
+    const fetchData = async () => {
+      try {
+        const userRes = await fetch(
+          "http://localhost:5000/api/auth/profile",
+          { headers }
+        );
+        const userData = await userRes.json();
+
+        if (userData.success) {
+          setUser(userData.data.user);
+        }
+      } catch (err) {
+        console.error("Failed to fetch user:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
 
   const upcomingSessions = [
     {
@@ -33,33 +67,26 @@ export default function SessionsPage() {
     },
   ];
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        Loading...
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 flex">
       <Sidebar />
 
-      <main className="flex-1 ml-64 px-6 py-4 max-w-7xl mx-auto">
-        <header className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-xl font-semibold text-gray-900">
-              Your Mentorship Sessions
-            </h1>
-            <p className="text-gray-600 mt-0.5 text-sm">
-              Keep learning and growing today!
-            </p>
-          </div>
+      <main className="flex-1 ml-64 px-6 py-5 max-w-7xl mx-auto">
+        <HeaderBar
+          user={user}
+          title="Your Mentorship Sessions"
+          subtitle="Keep learning and growing today!"
+        />
 
-          <div className="flex items-center gap-3">
-            <button className="relative p-1.5 hover:bg-gray-200 rounded-full transition">
-              <Bell className="w-4 h-4 text-gray-800" />
-              <span className="absolute top-0.5 right-0.5 w-2 h-2 bg-red-500 rounded-full" />
-            </button>
-
-            <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center">
-              <User className="w-4 h-4 text-white" />
-            </div>
-          </div>
-        </header>
-
+        {/* Tabs */}
         <div className="flex gap-6 border-b border-gray-200 mb-5">
           {["Upcoming", "Pending", "History"].map((tab) => (
             <button
@@ -79,6 +106,7 @@ export default function SessionsPage() {
           ))}
         </div>
 
+        {/* Sessions */}
         <div className="space-y-4">
           {upcomingSessions.map((session, i) => (
             <SessionCard key={i} session={session} />

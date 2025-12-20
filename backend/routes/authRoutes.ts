@@ -7,100 +7,95 @@ import { generateToken } from "../utils/generateToken";
 
 const router = Router();
 
+/* ===== BASIC AUTH ===== */
 router.post("/signup", signup);
 router.post("/login", login);
 router.post("/logout", authenticate, logout);
 router.get("/profile", authenticate, getProfile);
 
+/* ===== GOOGLE AUTH ===== */
 router.get("/google", (req, res) => {
-    const scopes = ["openid", "email", "profile"].join(" ");
-    const redirectUri = encodeURIComponent(config.google.redirectUri!);
+  const role = req.query.role === "mentor" ? "mentor" : "student";
+  const state = Buffer.from(JSON.stringify({ role })).toString("base64");
+  const scopes = ["openid", "email", "profile"].join(" ");
 
-   const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?response_type=code&client_id=${config.google.clientId}&redirect_uri=${redirectUri}&scope=${scopes}&prompt=consent&access_type=offline`;
-    res.redirect(googleAuthUrl);
+  const googleUrl =
+    `https://accounts.google.com/o/oauth2/v2/auth?` +
+    `response_type=code` +
+    `&client_id=${config.google.clientId}` +
+    `&redirect_uri=${encodeURIComponent(config.google.redirectUri)}` +
+    `&scope=${scopes}` +
+    `&state=${state}`;
+
+  res.redirect(googleUrl);
 });
 
 router.get("/google/callback", async (req, res) => {
+  try {
     const code = req.query.code as string;
+    const state = JSON.parse(Buffer.from(req.query.state as string, "base64").toString());
+    const role: "student" | "mentor" = state.role === "mentor" ? "mentor" : "student";
 
-    if (!code) {
-        return res.redirect("http://localhost:3000/login?error=missing_code");
-    }
+    // Exchange code for tokens
+    const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        code,
+        client_id: config.google.clientId!,
+        client_secret: config.google.clientSecret!,
+        redirect_uri: config.google.redirectUri!,
+        grant_type: "authorization_code",
+      }),
+    });
+    const tokenData = await tokenRes.json();
+    if (!tokenData.access_token) throw new Error("Failed to get access token");
 
-    try {
-        const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-            code,
-            client_id: config.google.clientId!,
-            client_secret: config.google.clientSecret!,
-            redirect_uri: config.google.redirectUri!,
-            grant_type: "authorization_code",
-        }),
-        });
+    // Fetch Google user info
+    const userRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+      headers: { Authorization: `Bearer ${tokenData.access_token}` },
+    });
+    const googleUser = await userRes.json();
 
-        const tokenData = await tokenRes.json();
-        if (!tokenData.access_token) throw new Error("No access token");
+    // Check if user exists
+    let user = (await pgPool.query("SELECT * FROM users WHERE email = $1", [googleUser.email])).rows[0];
 
-        const userRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-        headers: { Authorization: `Bearer ${tokenData.access_token}` },
-        });
-        const googleUser = await userRes.json();
-
-        let user = (await pgPool.query("SELECT * FROM users WHERE email = $1", [googleUser.email])).rows[0];
-
-        if (!user) {
-        const insertRes = await pgPool.query(
-            `INSERT INTO users (name, email, email_verified_at, profile_picture, google_id)
-            VALUES ($1, $2, NOW(), $3, $4)
-            RETURNING *`,
-            [
-            googleUser.name || googleUser.email.split("@")[0],
-            googleUser.email,
-            googleUser.picture,
-            googleUser.sub,
-            ]
+    if (!user) {
+      try {
+        const { rows } = await pgPool.query(
+          `INSERT INTO users (name, email, email_verified_at, profile_picture, google_id, role)
+           VALUES ($1,$2,NOW(),$3,$4,$5) RETURNING *`,
+          [googleUser.name, googleUser.email, googleUser.picture, googleUser.sub, role]
         );
-        user = insertRes.rows[0];
-        } else if (!user.google_id) {
-        await pgPool.query(
-            "UPDATE users SET google_id = $1, profile_picture = $2 WHERE id = $3",
-            [googleUser.sub, googleUser.picture, user.id]
-        );
-        }
-
-        const token = generateToken(user.id, user.email);
-
-        return res.json({
-        success: true,
-        message: "Google login successful!",
-        user: {
-            id: user.id,
-            name: user.name,
-            email: user.email,
-            profile_picture: user.profile_picture,
-            google_id: user.google_id,
-            email_verified_at: user.email_verified_at,
-            created_at: user.created_at,
-        },
-        googleData: {
-            sub: googleUser.sub,
-            name: googleUser.name,
-            given_name: googleUser.given_name,
-            family_name: googleUser.family_name,
-            picture: googleUser.picture,
-            email: googleUser.email,
-            email_verified: googleUser.email_verified,
-            locale: googleUser.locale,
-        },
-        token,
-        });
-
-    } catch (error) {
-        console.error("Google OAuth failed:", error);
+        user = rows[0];
+        console.log("Google user saved:", user);
+      } catch (err) {
+        console.error("Failed to insert Google user:", err);
         return res.redirect("http://localhost:3000/login?error=auth_failed");
+      }
     }
+
+    // Generate JWT and set role-based cookie
+    const jwtToken = generateToken(user.id, user.email, user.role);
+    const cookieName = user.role === "student" ? "student_auth_token" : "mentor_auth_token";
+    res.cookie(cookieName, jwtToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    // Redirect to frontend dashboard
+    const redirectUrl =
+      user.role === "mentor"
+        ? "http://localhost:3000/mentor/dashboard"
+        : "http://localhost:3000/home";
+
+    res.redirect(redirectUrl);
+  } catch (err) {
+    console.error("Google auth callback error:", err);
+    res.redirect("http://localhost:3000/login?error=auth_failed");
+  }
 });
 
 export default router;
