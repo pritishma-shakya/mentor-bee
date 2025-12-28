@@ -3,38 +3,39 @@
 import { useEffect, useState } from "react";
 import Sidebar from "@/components/sidebar";
 import HeaderBar from "@/components/header-bar";
+import { toast } from "react-hot-toast";
 
 export default function SettingsPage() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      setLoading(false);
-      return;
-    }
-
-    const fetchUser = async () => {
+    const fetchData = async () => {
       try {
         const res = await fetch("http://localhost:5000/api/auth/profile", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          credentials: "include",
         });
 
+        if (!res.ok) throw new Error("Unauthorized");
+
         const data = await res.json();
-        if (data.success) {
-          setUser(data.data.user);
+
+        if (data?.user) {
+          setUser(data.user);
+        } else {
+          setUser(null);
+          console.warn("User data missing or not authenticated", data);
         }
       } catch (err) {
         console.error("Failed to fetch user:", err);
+        toast.error("Failed to fetch user");
+        setUser(null);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchUser();
+    fetchData();
   }, []);
 
   if (loading) {

@@ -12,7 +12,7 @@ export interface AuthRequest extends Request {
     name: string;
     role: "student" | "mentor" | "admin";
     profile_picture?: string;
-    status?: "pending" | "accepted" | "rejected" | "suspended"; // only for mentors
+    status?: "pending" | "accepted" | "rejected" | "suspended";
   };
 }
 
@@ -27,8 +27,11 @@ export const authenticate = async (
   res: Response,
   next: NextFunction
 ) => {
+  // Check all possible tokens
   const token =
-    req.cookies?.auth_token ||
+    req.cookies?.student_auth_token ||
+    req.cookies?.mentor_auth_token ||
+    req.cookies?.admin_auth_token || // <-- added for admin
     (req.headers.authorization?.startsWith("Bearer ")
       ? req.headers.authorization.split(" ")[1]
       : null);
@@ -45,10 +48,12 @@ export const authenticate = async (
       [decoded.id]
     );
 
-    if (!userRows.length) return res.status(401).json({ message: "User not found" });
+    if (!userRows.length)
+      return res.status(401).json({ message: "User not found" });
 
     const user = userRows[0];
 
+    // Add mentor status if role is mentor
     if (user.role === "mentor") {
       const { rows: mentorRows } = await pgPool.query(
         `SELECT status, verified_at FROM mentors WHERE user_id = $1`,
@@ -64,4 +69,12 @@ export const authenticate = async (
     console.error("JWT verify error:", err);
     return res.status(401).json({ message: "Invalid token" });
   }
+};
+
+// Optional middleware to check for admin only
+export const adminOnly = (req: AuthRequest, res: Response, next: NextFunction) => {
+  if (!req.user || req.user.role !== "admin") {
+    return res.status(403).json({ message: "Forbidden: Admins only" });
+  }
+  next();
 };

@@ -5,7 +5,7 @@ import toast, { Toaster } from "react-hot-toast";
 import Sidebar from "@/components/sidebar";
 import MentorCard from "@/components/mentor-card";
 import HeaderBar from "@/components/header-bar";
-import { Search, Bell, User, Star, Clock, Calendar, ChevronDown } from "lucide-react";
+import { Star, Clock, Calendar, ChevronDown } from "lucide-react";
 
 interface Mentor {
   id: string;
@@ -32,51 +32,48 @@ export default function ExplorePage() {
   const [user, setUser] = useState<UserProps | null>(null);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-
-    const headers: Record<string, string> = {};
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-
-    // Fetch user profile
-    if (token) {
-      fetch("http://localhost:5000/api/auth/profile", { headers })
-        .then(res => res.json())
-        .then(data => {
-          if (data.success) setUser(data.data.user);
-        })
-        .catch(err => {
-          console.error(err);
-          toast.error("Failed to fetch user info");
+    const fetchAll = async () => {
+      try {
+        // ---------------- Fetch user profile ----------------
+        const profileRes = await fetch("http://localhost:5000/api/auth/profile", {
+          credentials: "include",
         });
-    }
+        const profileData = await profileRes.json();
 
-    // Fetch mentors
-    fetch("http://localhost:5000/api/mentors", { headers })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success && Array.isArray(data.data)) {
-          const normalized = data.data.map((m: any) => ({
-            ...m,
-            rating: 4.8, // placeholder rating
-            tags: m.expertise.map((e: any) => e.name),
-          }));
-          setMentors(normalized);
-        } else {
-          toast.error("Failed to fetch mentors");
-        }
-      })
-      .catch(err => {
-        console.error(err);
-        toast.error("Failed to fetch mentors");
-      })
-      .finally(() => setLoading(false));
+        if (profileData.success && profileData.user) setUser(profileData.user);
+        else toast.error(profileData.message || "Failed to fetch user info");
+
+        // ---------------- Fetch mentors ----------------
+        const mentorsRes = await fetch("http://localhost:5000/api/mentors", {
+          credentials: "include",
+        });
+        const mentorsData = await mentorsRes.json();
+
+        if (mentorsData.success && Array.isArray(mentorsData.data)) {
+          setMentors(
+            mentorsData.data.map((m: any) => ({
+              ...m,
+              rating: m.rating || 4.8,
+              tags: m.expertise.map((e: any) => e.name),
+            }))
+          );
+        } else toast.error(mentorsData.message || "Failed to fetch mentors");
+      } catch (err) {
+        console.error("Failed to fetch data:", err);
+        toast.error("Failed to fetch data");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAll();
   }, []);
 
+  // Dummy courses & groups
   const courses = [
     { title: "React Mastery 2025", mentor: "Sarah Johnson", duration: "6h 30m", rating: 4.9, lessons: 12, level: "Intermediate", updated: "Oct 25, 2025" },
     { title: "AWS Certified Solutions Architect", mentor: "Michael Lee", duration: "8h", rating: 4.8, lessons: 15, level: "Beginner", updated: "Nov 1, 2025" },
   ];
-
   const groupSessions = [
     { title: "Live UI/UX Workshop", mentor: "Alex Chen", date: "Nov 20, 2025", time: "3:00 PM", price: 10 },
     { title: "Machine Learning Study Group", mentor: "Emily Davis", date: "Nov 22, 2025", time: "6:00 PM", price: 12 },
@@ -90,9 +87,9 @@ export default function ExplorePage() {
       <main className="flex-1 ml-64 px-6 py-4 max-w-7xl mx-auto">
         <HeaderBar
           user={user}
-          title="Explore"
+          title="Explore Page"
           subtitle="Find your next mentor, course, or group session"
-          showSearch={true}
+          showSearch
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
         />
@@ -130,7 +127,6 @@ export default function ExplorePage() {
               <ChevronDown className="w-5 h-5 text-gray-500" />
             </div>
           </div>
-
           <div className="relative">
             <select className="appearance-none px-5 py-3 pr-12 bg-white border border-gray-300 rounded-xl text-gray-800 font-medium text-sm shadow-sm hover:border-gray-400 focus:border-orange-400 focus:outline-none transition cursor-pointer">
               <option>Sort by: Recommended</option>
@@ -143,74 +139,76 @@ export default function ExplorePage() {
               <ChevronDown className="w-5 h-5 text-gray-500" />
             </div>
           </div>
-
-          <button className="ml-auto text-sm font-medium text-orange-600 hover:text-orange-700 transition">
-            Clear filters
-          </button>
         </div>
 
         {/* Content Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mt-6">
-          {activeTab === "mentors" && (
-            loading ? <p className="text-gray-500">Loading mentors...</p> :
-            mentors.map((m, i) => (
-              <MentorCard 
-                key={m.id} 
-                mentor={{ 
-                  id: m.id,   // <-- add this
-                  name: m.full_name, 
-                  expertise: m.expertise.map(e => e.name).join(", "), 
-                  rating: m.rating || 4.8, 
-                  tags: m.tags || [], 
-                  price: parseFloat(m.hourly_rate) 
-                }} 
-              />
-            ))
-          )}
+          {activeTab === "mentors" &&
+            (loading ? (
+              <p className="text-gray-500">Loading mentors...</p>
+            ) : (
+              mentors.map((m) => (
+                <MentorCard
+                  key={m.id}
+                  mentor={{
+                    id: m.id,
+                    name: m.full_name,
+                    expertise: m.expertise.map((e) => e.name).join(", "),
+                    rating: m.rating || 4.8,
+                    tags: m.tags || [],
+                    price: parseFloat(m.hourly_rate),
+                  }}
+                />
+              ))
+            ))}
 
-          {/* Courses */}
-          {activeTab === "courses" && courses.map((course, i) => (
-            <div key={i} className="bg-white rounded-2xl overflow-hidden border border-gray-200 shadow-sm hover:shadow-md transition cursor-pointer">
-              <div className="w-full h-28 bg-gray-200" />
-              <div className="p-4">
-                <div className="flex justify-between items-start">
-                  <h3 className="font-semibold text-gray-900 text-base">{course.title}</h3>
-                  <div className="flex items-center gap-1 text-orange-500">
-                    <Star className="w-4 h-4 fill-current" />
-                    <span className="font-semibold text-sm">{course.rating}</span>
+          {activeTab === "courses" &&
+            courses.map((course, i) => (
+              <div key={i} className="bg-white rounded-2xl overflow-hidden border border-gray-200 shadow-sm hover:shadow-md transition cursor-pointer">
+                <div className="w-full h-28 bg-gray-200" />
+                <div className="p-4">
+                  <div className="flex justify-between items-start">
+                    <h3 className="font-semibold text-gray-900 text-base">{course.title}</h3>
+                    <div className="flex items-center gap-1 text-orange-500">
+                      <Star className="w-4 h-4 fill-current" />
+                      <span className="font-semibold text-sm">{course.rating}</span>
+                    </div>
+                  </div>
+                  <p className="text-gray-600 text-sm mt-0.5">by {course.mentor}</p>
+                  <div className="flex flex-wrap gap-3 mt-3 text-sm text-gray-700">
+                    <div className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {course.duration}</div>
+                    <div className="flex items-center gap-1">📘 {course.lessons} lessons</div>
+                    <div className="flex items-center gap-1">🔥 {course.level}</div>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">Updated {course.updated}</p>
+                  <button className="mt-4 w-full py-2 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-xl transition">
+                    Enroll Now
+                  </button>
+                </div>
+              </div>
+            ))}
+
+          {activeTab === "groups" &&
+            groupSessions.map((session, i) => (
+              <div key={i} className="bg-white rounded-2xl overflow-hidden border border-gray-200 shadow-sm hover:shadow-md transition cursor-pointer">
+                <div className="w-full h-28 bg-purple-200" />
+                <div className="p-4">
+                  <div className="flex justify-between items-start">
+                    <h3 className="font-semibold text-gray-900 text-base">{session.title}</h3>
+                    <span className="px-2 py-0.5 text-xs font-bold bg-purple-100 text-purple-700 rounded-full">Live</span>
+                  </div>
+                  <p className="text-gray-600 text-sm mt-0.5">with {session.mentor}</p>
+                  <div className="flex items-center gap-2 mt-3 text-gray-700 text-sm"><Calendar className="w-4 h-4" /> {session.date}</div>
+                  <div className="flex items-center gap-2 text-gray-700 text-sm">⏰ {session.time}</div>
+                  <div className="flex justify-between items-center mt-4">
+                    <span className="text-lg font-bold text-purple-600">${session.price}</span>
+                    <button className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-xl transition">
+                      Join Session
+                    </button>
                   </div>
                 </div>
-                <p className="text-gray-600 text-sm mt-0.5">by {course.mentor}</p>
-                <div className="flex flex-wrap gap-3 mt-3 text-sm text-gray-700">
-                  <div className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {course.duration}</div>
-                  <div className="flex items-center gap-1">📘 {course.lessons} lessons</div>
-                  <div className="flex items-center gap-1">🔥 {course.level}</div>
-                </div>
-                <p className="text-xs text-gray-500 mt-2">Updated {course.updated}</p>
-                <button className="mt-4 w-full py-2 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-xl transition">Enroll Now</button>
               </div>
-            </div>
-          ))}
-
-          {/* Group Sessions */}
-          {activeTab === "groups" && groupSessions.map((session, i) => (
-            <div key={i} className="bg-white rounded-2xl overflow-hidden border border-gray-200 shadow-sm hover:shadow-md transition cursor-pointer">
-              <div className="w-full h-28 bg-purple-200" />
-              <div className="p-4">
-                <div className="flex justify-between items-start">
-                  <h3 className="font-semibold text-gray-900 text-base">{session.title}</h3>
-                  <span className="px-2 py-0.5 text-xs font-bold bg-purple-100 text-purple-700 rounded-full">Live</span>
-                </div>
-                <p className="text-gray-600 text-sm mt-0.5">with {session.mentor}</p>
-                <div className="flex items-center gap-2 mt-3 text-gray-700 text-sm"><Calendar className="w-4 h-4" /> {session.date}</div>
-                <div className="flex items-center gap-2 text-gray-700 text-sm">⏰ {session.time}</div>
-                <div className="flex justify-between items-center mt-4">
-                  <span className="text-lg font-bold text-purple-600">${session.price}</span>
-                  <button className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-xl transition">Join Session</button>
-                </div>
-              </div>
-            </div>
-          ))}
+            ))}
         </div>
       </main>
     </div>

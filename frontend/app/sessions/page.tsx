@@ -4,36 +4,67 @@ import { useEffect, useState } from "react";
 import Sidebar from "@/components/sidebar";
 import HeaderBar from "@/components/header-bar";
 import SessionCard from "@/components/session-card";
+import { toast } from "react-hot-toast";
+
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: "student" | "mentor";
+  profile_picture?: string;
+}
+
+interface Session {
+  mentor: string;
+  avatar?: string;
+  subject?: string;
+  topic?: string;
+  date: string;
+  time: string;
+  link?: string;
+  goal?: string;
+  notes?: string;
+}
 
 export default function SessionsPage() {
-  const [activeTab, setActiveTab] = useState("Upcoming");
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sessions, setSessions] = useState<Session[]>([]);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      setLoading(false);
-      return;
-    }
-
-    const headers: Record<string, string> = {
-      Authorization: `Bearer ${token}`,
-    };
-
     const fetchData = async () => {
       try {
-        const userRes = await fetch(
-          "http://localhost:5000/api/auth/profile",
-          { headers }
-        );
-        const userData = await userRes.json();
+        // Fetch profile
+        const profileRes = await fetch("http://localhost:5000/api/auth/profile", {
+          credentials: "include",
+        });
+        if (!profileRes.ok) throw new Error("Unauthorized");
 
-        if (userData.success) {
-          setUser(userData.data.user);
+        const profileData = await profileRes.json();
+
+        if (profileData?.user) {
+          setUser(profileData.user);
+        } else {
+          setUser(null);
+          console.warn("User data missing or not authenticated", profileData);
+        }
+
+        // Fetch sessions (replace with your actual sessions endpoint)
+        const sessionsRes = await fetch("http://localhost:5000/api/students/sessions", {
+          credentials: "include",
+        });
+        const sessionsData = await sessionsRes.json();
+        if (sessionsData.success && sessionsData.data) {
+          setSessions(sessionsData.data);
+        } else {
+          console.warn("No sessions found or failed to fetch", sessionsData);
+          setSessions([]);
         }
       } catch (err) {
-        console.error("Failed to fetch user:", err);
+        console.error("Failed to fetch data:", err);
+        toast.error("Failed to fetch user or sessions");
+        setUser(null);
+        setSessions([]);
       } finally {
         setLoading(false);
       }
@@ -41,31 +72,6 @@ export default function SessionsPage() {
 
     fetchData();
   }, []);
-
-  const upcomingSessions = [
-    {
-      mentor: "Alice Smith",
-      avatar: "AS",
-      subject: "Mathematics",
-      topic: "Introduction to Algebra",
-      date: "Sun, Nov 9",
-      time: "1:00 PM – 2:00 PM",
-      link: "https://mentorb.ee/join-7e8xwk",
-      goal: "To learn about basic principles of mathematics",
-      notes: "So excited to learn more!",
-    },
-    {
-      mentor: "Robert King",
-      avatar: "RK",
-      subject: "Physics",
-      topic: "Newton's Laws of Motion",
-      date: "Tue, Nov 11",
-      time: "4:00 PM – 5:00 PM",
-      link: "https://mentorb.ee/join-9f2mqp",
-      goal: "Master foundational physics concepts",
-      notes: "Bring notebook and questions",
-    },
-  ];
 
   if (loading) {
     return (
@@ -91,15 +97,15 @@ export default function SessionsPage() {
           {["Upcoming", "Pending", "History"].map((tab) => (
             <button
               key={tab}
-              onClick={() => setActiveTab(tab)}
+              onClick={() => console.log("Switch tab to", tab)}
               className={`pb-2 text-sm font-medium relative ${
-                activeTab === tab
+                tab === "Upcoming"
                   ? "text-orange-600"
                   : "text-gray-500 hover:text-gray-800"
               }`}
             >
               {tab}
-              {activeTab === tab && (
+              {tab === "Upcoming" && (
                 <span className="absolute bottom-0 left-0 w-full h-0.5 bg-orange-500 rounded-full" />
               )}
             </button>
@@ -108,9 +114,11 @@ export default function SessionsPage() {
 
         {/* Sessions */}
         <div className="space-y-4">
-          {upcomingSessions.map((session, i) => (
-            <SessionCard key={i} session={session} />
-          ))}
+          {sessions.length === 0 ? (
+            <p className="text-gray-500 text-center py-10">No sessions available.</p>
+          ) : (
+            sessions.map((session, i) => <SessionCard key={i} session={session} />)
+          )}
         </div>
       </main>
     </div>

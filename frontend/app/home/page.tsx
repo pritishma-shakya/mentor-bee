@@ -50,14 +50,12 @@ export default function HomePage() {
         if (!profileRes.ok) throw new Error("Unauthorized");
 
         const profileData = await profileRes.json();
-        console.log("Profile response:", profileData);
         setUser(profileData.user); 
 
         const mentorsRes = await fetch("http://localhost:5000/api/mentors", {
           credentials: "include",
         });
         const mentorsData = await mentorsRes.json();
-        console.log("Mentors response:", mentorsData);
         if (mentorsData.success && mentorsData.data) {
           setMentors(
             mentorsData.data.map((m: any) => ({
@@ -72,14 +70,12 @@ export default function HomePage() {
           credentials: "include",
         });
         const goalsData = await goalsRes.json();
-        console.log("Learning goals response:", goalsData);
         if (goalsData.success && goalsData.data) setLearningGoals(goalsData.data);
 
         const rewardsRes = await fetch("http://localhost:5000/api/students/rewards", {
           credentials: "include",
         });
         const rewardsData = await rewardsRes.json();
-        console.log("Rewards response:", rewardsData);
         if (rewardsData.success && rewardsData.data) {
           setSummary({
             sessions: rewardsData.data.sessions || 0,

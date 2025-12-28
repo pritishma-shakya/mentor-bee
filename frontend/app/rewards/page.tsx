@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Trophy, Gift, Crown, Medal, Zap, Coffee, Calendar, Sunrise } from "lucide-react";
 import Sidebar from "@/components/sidebar";
 import HeaderBar from "@/components/header-bar";
+import { toast } from "react-hot-toast";
 
 interface Badge {
   name: string;
@@ -46,20 +47,25 @@ export default function RewardsPage() {
   ];
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) return setLoading(false);
-
-    const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
-
     const fetchData = async () => {
       try {
-        // Fetch user profile
-        const userRes = await fetch("http://localhost:5000/api/auth/profile", { headers });
+        const userRes = await fetch("http://localhost:5000/api/auth/profile", {
+          credentials: "include",
+        });
+
+        if (!userRes.ok) throw new Error("Unauthorized");
+
         const userData = await userRes.json();
-        if (userData.success) setUser(userData.data.user);
+
+        if (userData?.user) {
+          setUser(userData.user);
+        } else {
+          setUser(null);
+          console.warn("User data missing or not authenticated", userData);
+        }
 
         // Fetch rewards
-        const rewardsRes = await fetch("http://localhost:5000/api/students/rewards", { headers });
+        const rewardsRes = await fetch("http://localhost:5000/api/students/rewards", { credentials: "include" });
         const rewardsData = await rewardsRes.json();
         if (rewardsData.success) {
           setTotalPoints(rewardsData.data.points || 0);
@@ -67,6 +73,7 @@ export default function RewardsPage() {
         }
       } catch (err) {
         console.error(err);
+        toast.error("Failed to fetch data");
       } finally {
         setLoading(false);
       }

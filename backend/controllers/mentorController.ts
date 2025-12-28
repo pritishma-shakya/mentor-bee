@@ -118,7 +118,7 @@ export const getMentorProfile = async (req: AuthRequest, res: Response) => {
   const client = await pgPool.connect();
   try {
     const { rows } = await client.query(
-      `SELECT m.*, u.name AS full_name, u.email, u.profile_picture, u."status"
+      `SELECT m.*, u.name AS full_name, u.email, u.profile_picture, u.status
        FROM mentors m
        JOIN users u ON m.user_id = u.id
        WHERE m.id = $1`,
@@ -154,7 +154,7 @@ export const listMentors = async (_req: AuthRequest, res: Response) => {
   const client = await pgPool.connect();
   try {
     const { rows: mentors } = await client.query(
-      `SELECT m.*, u.name AS full_name, u.email, u.profile_picture, u."status"
+      `SELECT m.*, u.name AS full_name, u.email, u.profile_picture, m.status
        FROM mentors m
        JOIN users u ON m.user_id = u.id
        ORDER BY m.created_at DESC`
