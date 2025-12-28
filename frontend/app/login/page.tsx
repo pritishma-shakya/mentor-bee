@@ -7,10 +7,7 @@ import InputField from "@/components/input";
 import SocialIcons from "@/components/social-icons";
 import Logo from "@/components/logo";
 
-type Role = "student" | "mentor";
-
 export default function LoginPage() {
-  const [role, setRole] = useState<Role>("student");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -22,6 +19,7 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Reset errors
     setEmailError("");
     setPasswordError("");
     setGeneralError("");
@@ -46,25 +44,40 @@ export default function LoginPage() {
       const res = await fetch("http://localhost:5000/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, role }),
+        credentials: "include", // ✅ cookie-based auth
+        body: JSON.stringify({ email, password }),
       });
 
       const data = await res.json();
+      console.log("LOGIN RESPONSE 👉", data);
 
       if (!res.ok || !data.success) {
-        setGeneralError(data.message || "Login failed");
+        setGeneralError(data.message || "Invalid credentials");
         return;
       }
 
-      // ✅ Save token and role correctly
-      localStorage.setItem("token", data.data.token);
-      localStorage.setItem("role", data.data.user.role);
+      // ✅ Your backend response shape
+      const user = data.user;
 
-      // Redirect based on role
-      window.location.href =
-        data.data.user.role === "mentor" ? "/mentor/dashboard" : "/home";
+      if (!user || !user.role) {
+        setGeneralError("Invalid login response from server");
+        return;
+      }
+
+      // Store role only (token is in httpOnly cookie)
+      localStorage.setItem("role", user.role);
+
+      // 🔀 Redirect based on role
+      if (user.role === "admin") {
+        window.location.href = "/admin/dashboard";
+      } else if (user.role === "mentor") {
+        window.location.href = "/mentor/dashboard";
+      } else {
+        window.location.href = "/home";
+      }
     } catch (err: any) {
-      setGeneralError(err.message || "Something went wrong");
+      console.error(err);
+      setGeneralError("Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -78,53 +91,25 @@ export default function LoginPage() {
           <div className="p-8 md:p-10 flex flex-col justify-center">
             <Logo width={80} height={80} />
 
-            {/* Role Switch Tabs */}
-            <div className="flex mt-4 mb-6 bg-gray-100 rounded-xl p-1">
-              <button
-                type="button"
-                onClick={() => setRole("student")}
-                className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${
-                  role === "student"
-                    ? "bg-white shadow text-orange-600"
-                    : "text-gray-500"
-                }`}
-              >
-                Student Login
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setRole("mentor")}
-                className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${
-                  role === "mentor"
-                    ? "bg-white shadow text-orange-600"
-                    : "text-gray-500"
-                }`}
-              >
-                Mentor Login
-              </button>
-            </div>
-
-            {/* Dynamic Text */}
-            <h1 className="text-2xl font-bold text-gray-800 mb-1">
-              {role === "mentor" ? "Welcome back, Mentor!" : "Welcome back!"}
+            <h1 className="text-2xl font-bold text-gray-800 mt-4 mb-1">
+              Welcome back 👋
             </h1>
 
             <p className="text-sm text-gray-600 mb-6">
-              {role === "mentor"
-                ? "Login to manage your students and sessions"
-                : "Login to continue your learning journey"}
+              Login to continue to MentorBee
             </p>
 
             <form className="space-y-4" onSubmit={handleSubmit}>
               <div>
                 <InputField
-                  placeholder={role === "mentor" ? "Mentor Email" : "Student Email"}
+                  placeholder="Email address"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />
-                {emailError && <p className="text-red-500 text-xs mt-1">{emailError}</p>}
+                {emailError && (
+                  <p className="text-red-500 text-xs mt-1">{emailError}</p>
+                )}
               </div>
 
               <div>
@@ -134,10 +119,14 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
-                {passwordError && <p className="text-red-500 text-xs mt-1">{passwordError}</p>}
+                {passwordError && (
+                  <p className="text-red-500 text-xs mt-1">{passwordError}</p>
+                )}
               </div>
 
-              {generalError && <p className="text-red-500 text-xs">{generalError}</p>}
+              {generalError && (
+                <p className="text-red-500 text-xs">{generalError}</p>
+              )}
 
               <div className="flex justify-end">
                 <a
@@ -148,24 +137,18 @@ export default function LoginPage() {
                 </a>
               </div>
 
-              <Button
-                text={
-                  loading
-                    ? "Logging in..."
-                    : role === "mentor"
-                    ? "Login as Mentor"
-                    : "Login as Student"
-                }
-              />
+              <Button text={loading ? "Logging in..." : "Login"} />
             </form>
 
             <div className="my-5 flex items-center">
               <div className="flex-1 border-t border-gray-300" />
-              <span className="px-3 text-xs text-gray-500">Or continue with</span>
+              <span className="px-3 text-xs text-gray-500">
+                Or continue with
+              </span>
               <div className="flex-1 border-t border-gray-300" />
             </div>
 
-            <SocialIcons role={role} />
+            <SocialIcons mode="login" />
 
             <p className="text-center mt-5 text-xs text-gray-600">
               Don’t have an account?
@@ -179,7 +162,8 @@ export default function LoginPage() {
             </p>
           </div>
 
-          <Illustration role={role} />
+          {/* RIGHT */}
+          <Illustration isMentor={false} />
         </div>
       </div>
     </div>

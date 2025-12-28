@@ -7,6 +7,7 @@ import cookieParser from "cookie-parser";
 import authRoutes from "./routes/authRoutes";
 import mentorRoutes from "./routes/mentorRoutes";
 import studentRoutes from "./routes/studentRoutes";
+import adminRoutes from "./routes/adminRoutes";
 
 dotenv.config();
 
@@ -34,6 +35,7 @@ app.use(
 app.use("/api/auth", authRoutes);
 app.use("/api/mentors", mentorRoutes);
 app.use("/api/students", studentRoutes);
+app.use("/api/admin", adminRoutes);
 
 /* ================= DEFAULT ROUTE ================= */
 

@@ -27,7 +27,7 @@ export default function SignUpPage() {
 
   const [passwordFocused, setPasswordFocused] = useState(false);
 
-  /* Password rules */
+  // Password rules
   const hasMinLength = password.length >= 8;
   const hasUppercase = /[A-Z]/.test(password);
   const hasLowercase = /[a-z]/.test(password);
@@ -35,7 +35,6 @@ export default function SignUpPage() {
   const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(password);
   const isPasswordValid =
     hasMinLength && hasUppercase && hasLowercase && hasNumber && hasSpecial;
-
   const showRequirements = passwordFocused || password.length > 0;
 
   const validateName = (name: string) => {
@@ -54,6 +53,7 @@ export default function SignUpPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Reset errors
     setNameError("");
     setEmailError("");
     setPasswordError("");
@@ -92,26 +92,25 @@ export default function SignUpPage() {
       const res = await fetch("http://localhost:5000/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name,
-          email,
-          password,
-          role,
-        }),
+        credentials: "include", // ✅ important for cookies
+        body: JSON.stringify({ name, email, password, role }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
         setGeneralError(data.message || "Signup failed");
+        setLoading(false);
         return;
       }
 
+      // Store token locally if needed
       localStorage.setItem("token", data.token);
       localStorage.setItem("role", role);
 
-      window.location.href =
-        role === "mentor" ? "/mentor/setup" : "/home";
+      // Redirect based on role
+      window.location.href = role === "mentor" ? "/mentor/setup" : "/home";
+
     } catch (error: any) {
       setGeneralError(error.message || "Something went wrong");
     } finally {
@@ -154,9 +153,7 @@ export default function SignUpPage() {
             </div>
 
             <h1 className="text-xl font-bold text-gray-800 mb-1">
-              {role === "mentor"
-                ? "Become a Mentor"
-                : "Create Your Account"}
+              {role === "mentor" ? "Become a Mentor" : "Create Your Account"}
             </h1>
 
             <p className="text-sm text-gray-600 mb-6">
@@ -172,21 +169,15 @@ export default function SignUpPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />
-              {nameError && (
-                <p className="text-red-500 text-xs">{nameError}</p>
-              )}
+              {nameError && <p className="text-red-500 text-xs">{nameError}</p>}
 
               <InputField
-                placeholder={
-                  role === "mentor" ? "Mentor Email" : "Student Email"
-                }
+                placeholder={role === "mentor" ? "Mentor Email" : "Student Email"}
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
-              {emailError && (
-                <p className="text-red-500 text-xs">{emailError}</p>
-              )}
+              {emailError && <p className="text-red-500 text-xs">{emailError}</p>}
 
               <InputField
                 placeholder="Password"
@@ -196,9 +187,7 @@ export default function SignUpPage() {
                 onFocus={() => setPasswordFocused(true)}
                 onBlur={() => setPasswordFocused(false)}
               />
-              {passwordError && (
-                <p className="text-red-500 text-xs">{passwordError}</p>
-              )}
+              {passwordError && <p className="text-red-500 text-xs">{passwordError}</p>}
 
               {showRequirements && (
                 <ul className="text-xs space-y-1">
@@ -209,12 +198,7 @@ export default function SignUpPage() {
                     ["One number", hasNumber],
                     ["One special character", hasSpecial],
                   ].map(([label, ok], i) => (
-                    <li
-                      key={i}
-                      className={`flex items-center gap-2 ${
-                        ok ? "text-green-600" : "text-gray-500"
-                      }`}
-                    >
+                    <li key={i} className={`flex items-center gap-2 ${ok ? "text-green-600" : "text-gray-500"}`}>
                       {ok ? <Check size={14} /> : <X size={14} />}
                       {label}
                     </li>
@@ -228,15 +212,9 @@ export default function SignUpPage() {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
               />
-              {confirmPasswordError && (
-                <p className="text-red-500 text-xs">
-                  {confirmPasswordError}
-                </p>
-              )}
+              {confirmPasswordError && <p className="text-red-500 text-xs">{confirmPasswordError}</p>}
 
-              {generalError && (
-                <p className="text-red-500 text-xs">{generalError}</p>
-              )}
+              {generalError && <p className="text-red-500 text-xs">{generalError}</p>}
 
               <Button
                 text={
@@ -251,26 +229,21 @@ export default function SignUpPage() {
 
             <div className="my-5 flex items-center">
               <div className="flex-1 border-t" />
-              <span className="px-3 text-xs text-gray-500">
-                Or continue with
-              </span>
+              <span className="px-3 text-xs text-gray-500">Or continue with</span>
               <div className="flex-1 border-t" />
             </div>
 
-            <SocialIcons role = {role}/>
+            <SocialIcons mode="signup" />
 
             <p className="text-center mt-5 text-xs text-gray-600">
               Already have an account?
-              <a
-                href="/login"
-                className="text-orange-600 font-semibold hover:underline"
-              >
-                {" "}
-                Login
+              <a href="/login" className="text-orange-600 font-semibold hover:underline">
+                {" "}Login
               </a>
             </p>
           </div>
-          <Illustration role={role} />
+
+          <Illustration isMentor={role === "mentor"} />
         </div>
       </div>
     </div>

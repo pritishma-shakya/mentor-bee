@@ -1,21 +1,27 @@
 import { Response } from "express";
 import bcrypt from "bcryptjs";
 import { pgPool } from "../config/database";
-import { generateToken, UserRole } from "../utils/generateToken";
+import { generateToken } from "../utils/generateToken";
 import { AuthRequest } from "../middlewares/authMiddleware";
 
-const VALID_ROLES: UserRole[] = ["student", "mentor"];
+export type UserRole = "student" | "mentor" | "admin";
 
-/* ---------------- Cookie helper ---------------- */
-const setAuthCookie = (res: Response, token: string, role: UserRole) => {
-  const cookieName = role === "student" ? "student_auth_token" : "mentor_auth_token";
+const VALID_ROLES: UserRole[] = ["student", "mentor", "admin"];
 
-  res.cookie(cookieName, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-  });
+/* ---------------- Cookie options ---------------- */
+const authCookieOptions = {
+  httpOnly: true,
+  secure: false,          // localhost
+  sameSite: "lax" as const,
+  path: "/",
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+};
+
+const clearCookieOptions = {
+  httpOnly: true,
+  secure: false,
+  sameSite: "lax" as const,
+  path: "/",
 };
 
 /* ================= SIGNUP ================= */
@@ -24,14 +30,23 @@ export const signup = async (req: AuthRequest, res: Response) => {
 
   if (!email || !password || !name || !role)
     return res.status(422).json({ message: "All fields required" });
-  if (!VALID_ROLES.includes(role)) return res.status(400).json({ message: "Invalid role" });
+
+  if (!VALID_ROLES.includes(role))
+    return res.status(400).json({ message: "Invalid role" });
 
   const client = await pgPool.connect();
   try {
     await client.query("BEGIN");
 
-    const existing = await client.query("SELECT id FROM users WHERE email = $1", [email]);
-    if (existing.rows.length) return res.status(409).json({ message: "User already exists" });
+    const existing = await client.query(
+      "SELECT id FROM users WHERE email = $1",
+      [email]
+    );
+
+    if (existing.rows.length) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ message: "User already exists" });
+    }
 
     const hashedPassword = await bcrypt.hash(password, 12);
 
@@ -43,13 +58,13 @@ export const signup = async (req: AuthRequest, res: Response) => {
     );
 
     const user = rows[0];
-    // console.log("User inserted:", user);
-
     const token = generateToken(user.id, user.email, user.role);
-    setAuthCookie(res, token, user.role);
+
+    res.cookie("auth_token", token, authCookieOptions);
 
     await client.query("COMMIT");
-    res.status(201).json({ user });
+
+    res.status(201).json({ success: true, user });
   } catch (err) {
     await client.query("ROLLBACK");
     console.error("Signup error:", err);
@@ -61,28 +76,38 @@ export const signup = async (req: AuthRequest, res: Response) => {
 
 /* ================= LOGIN ================= */
 export const login = async (req: AuthRequest, res: Response) => {
-  const { email, password, role } = req.body;
+  const { email, password } = req.body;
 
-  if (!email || !password || !role) return res.status(422).json({ message: "Missing credentials" });
-  if (!VALID_ROLES.includes(role)) return res.status(400).json({ message: "Invalid role" });
+  if (!email || !password)
+    return res.status(422).json({ message: "Missing credentials" });
 
   try {
     const { rows } = await pgPool.query(
-      `SELECT id, email, name, password, role
-       FROM users
-       WHERE email = $1 AND role = $2`,
-      [email, role]
+      "SELECT id, email, name, password, role FROM users WHERE email = $1",
+      [email.trim()]
     );
 
     const user = rows[0];
-    if (!user || !(await bcrypt.compare(password, user.password))) {
-      return res.status(401).json({ message: "Invalid credentials" });
-    }
+    if (!user)
+      return res.status(401).json({ message: "Invalid email or password" });
+
+    const valid = await bcrypt.compare(password, user.password);
+    if (!valid)
+      return res.status(401).json({ message: "Invalid email or password" });
 
     const token = generateToken(user.id, user.email, user.role);
-    setAuthCookie(res, token, user.role);
 
-    res.json({ user: { id: user.id, email: user.email, name: user.name, role: user.role } });
+    res.cookie("auth_token", token, authCookieOptions);
+
+    res.json({
+      success: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+      },
+    });
   } catch (err) {
     console.error("Login error:", err);
     res.status(500).json({ message: "Login failed" });
@@ -91,16 +116,17 @@ export const login = async (req: AuthRequest, res: Response) => {
 
 /* ================= LOGOUT ================= */
 export const logout = (_req: AuthRequest, res: Response) => {
-  // Clear both possible role cookies
-  res.clearCookie("student_auth_token", { httpOnly: true, sameSite: "lax" });
-  res.clearCookie("mentor_auth_token", { httpOnly: true, sameSite: "lax" });
-
-  res.json({ message: "Logged out successfully" });
+  res.clearCookie("auth_token", clearCookieOptions);
+  res.json({ success: true, message: "Logged out successfully" });
 };
-
 
 /* ================= PROFILE ================= */
 export const getProfile = (req: AuthRequest, res: Response) => {
-  if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-  res.json({ user: req.user });
+  if (!req.user)
+    return res.status(401).json({ message: "Unauthorized" });
+
+  res.json({
+    success: true,
+    user: req.user,
+  });
 };

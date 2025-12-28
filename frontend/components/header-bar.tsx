@@ -6,7 +6,7 @@ interface UserProps {
   id: string;
   name: string;
   email: string;
-  role: "student" | "mentor";
+  role: "student" | "mentor" | "admin";
   profile_picture?: string;
 }
 

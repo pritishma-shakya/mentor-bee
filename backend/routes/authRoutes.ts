@@ -68,7 +68,7 @@ router.get("/google/callback", async (req, res) => {
           [googleUser.name, googleUser.email, googleUser.picture, googleUser.sub, role]
         );
         user = rows[0];
-        console.log("Google user saved:", user);
+        // console.log("Google user saved:", user);
       } catch (err) {
         console.error("Failed to insert Google user:", err);
         return res.redirect("http://localhost:3000/login?error=auth_failed");

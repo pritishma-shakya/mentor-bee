@@ -1,10 +1,10 @@
 interface IllustrationProps {
-  role: "student" | "mentor";
+  isMentor: boolean;
 }
 
-export default function Illustration({ role }: IllustrationProps) {
+export default function Illustration({ isMentor }: IllustrationProps) {
   const content =
-    role === "mentor"
+    isMentor
       ? {
           title: "Share Your Knowledge. Shape Futures.",
           subtitle: "Become a Mentor and Guide Students to Success.",
@@ -13,7 +13,6 @@ export default function Illustration({ role }: IllustrationProps) {
           title: "Your Learning Journey Starts Here.",
           subtitle: "Find Expert Mentors to Guide You Every Step.",
         };
-
   return (
     <div className="hidden md:block bg-gradient-to-br from-amber-50 to-orange-50 rounded-3xl p-8 m-4 shadow-lg">
       <div className="h-full flex flex-col justify-center items-center text-center">

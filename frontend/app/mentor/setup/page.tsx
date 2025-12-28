@@ -22,12 +22,14 @@ export default function MentorSetupPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    fetch("http://localhost:5000/api/mentors/expertise")
-      .then(res => res.json())
-      .then(data => {
+    fetch("http://localhost:5000/api/mentors/expertise", {
+      credentials: "include",
+    })
+      .then((res) => res.json())
+      .then((data) => {
         if (data.success) setAllExpertise(data.data || []);
       })
-      .catch(err => console.error(err));
+      .catch((err) => console.error(err));
   }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -35,62 +37,56 @@ export default function MentorSetupPage() {
   };
 
   const handleAddExpertise = (skill: Expertise) => {
-    if (!expertiseList.find(e => e.id === skill.id)) {
+    if (!expertiseList.find((e) => e.id === skill.id)) {
       setExpertiseList([...expertiseList, skill]);
     }
   };
 
   const handleRemoveExpertise = (id: string) => {
-    setExpertiseList(expertiseList.filter(e => e.id !== id));
+    setExpertiseList(expertiseList.filter((e) => e.id !== id));
   };
 
   const handleSubmit = async () => {
-    if (!name || !bio || expertiseList.length === 0) {
-      toast.error("Please fill all required fields");
-      return;
-    }
+  if (!name || !bio || expertiseList.length === 0) {
+    toast.error("Please fill all required fields");
+    return;
+  }
 
-    setLoading(true);
+  setLoading(true);
 
-    try {
-      const token = localStorage.getItem("token");
-      if (!token) throw new Error("User not authenticated");
-
-      const payload = {
+  try {
+    const res = await fetch("http://localhost:5000/api/mentors/setup", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      credentials: "include",
+      body: JSON.stringify({
         name,
         bio,
         hourlyRate: hourlyRate ? parseFloat(hourlyRate) : null,
         experience,
         location,
         responseTime,
-        expertiseIds: expertiseList.map(e => e.id),
-      };
+        expertiseIds: expertiseList.map((e) => e.id),
+      }),
+    });
 
-      const res = await fetch("http://localhost:5000/api/mentors/setup", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
+    const data = await res.json();
 
-      const data = await res.json();
-
-      if (data.success) {
-        toast.success("Profile setup complete!");
-        window.location.href = "/mentor/dashboard";
-      } else {
-        toast.error(data.message || "Failed to setup profile");
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error("Something went wrong");
-    } finally {
-      setLoading(false);
+    if (data.success) {
+      toast.success("Profile setup complete!");
+      window.location.href = "/mentor/dashboard";
+    } else {
+      toast.error(data.message || "Failed to setup profile");
     }
-  };
-
+  } catch (err) {
+    console.error(err);
+    toast.error("Something went wrong");
+  } finally {
+    setLoading(false);
+  }
+};
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <Toaster position="top-right" />
@@ -126,7 +122,7 @@ export default function MentorSetupPage() {
           <input
             type="text"
             value={name}
-            onChange={e => setName(e.target.value)}
+            onChange={(e) => setName(e.target.value)}
             placeholder="Your full name"
             className="w-full border border-gray-300 placeholder-gray-400 text-gray-700 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-orange-400"
           />
@@ -137,58 +133,54 @@ export default function MentorSetupPage() {
           <label className="block text-gray-700 mb-1">Bio</label>
           <textarea
             value={bio}
-            onChange={e => setBio(e.target.value)}
+            onChange={(e) => setBio(e.target.value)}
             placeholder="Tell us about yourself"
             className="w-full border border-gray-300 placeholder-gray-400 text-gray-700 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none"
             rows={3}
           />
         </div>
 
+        {/* Expertise */}
         <div>
-            <label className="block text-gray-700 mb-1">Expertise</label>
-
-            {/* Dropdown */}
-            <select
-                onChange={e => {
-                const skill = allExpertise.find(s => s.id === e.target.value);
-                if (skill) handleAddExpertise(skill);
-                e.target.value = "";
-                }}
-                className="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-orange-400 text-gray-700"
-                defaultValue=""
-            >
-                <option value="" disabled >
-                Select expertise...
+          <label className="block text-gray-700 mb-1">Expertise</label>
+          <select
+            onChange={(e) => {
+              const skill = allExpertise.find((s) => s.id === e.target.value);
+              if (skill) handleAddExpertise(skill);
+              e.target.value = "";
+            }}
+            className="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-orange-400 text-gray-700"
+            defaultValue=""
+          >
+            <option value="" disabled>
+              Select expertise...
+            </option>
+            {allExpertise
+              .filter((s) => !expertiseList.find((e) => e.id === s.id))
+              .map((skill) => (
+                <option key={skill.id} value={skill.id}>
+                  {skill.name}
                 </option>
-                {allExpertise
-                .filter(s => !expertiseList.find(e => e.id === s.id))
-                .map(skill => (
-                    <option key={skill.id} value={skill.id}>
-                    {skill.name}
-                    </option>
-                ))}
-            </select>
+              ))}
+          </select>
 
-            {/* Display selected tags below */}
-            <div className="flex flex-wrap gap-2 mt-2">
-                {expertiseList.map(skill => (
-                <div
-                    key={skill.id}
-                    className="flex items-center bg-orange-100 text-orange-800 px-2 py-1 rounded-full text-sm"
-                >
-                    {skill.name}
-                    <X
-                    className="ml-1 cursor-pointer"
-                    onClick={() => handleRemoveExpertise(skill.id)}
-                    size={14}
-                    />
-                </div>
-                ))}
-            </div>
-
-            <p className="text-gray-500 text-xs mt-1">Click to add expertise as tags</p>
-            </div>
-
+          <div className="flex flex-wrap gap-2 mt-2">
+            {expertiseList.map((skill) => (
+              <div
+                key={skill.id}
+                className="flex items-center bg-orange-100 text-orange-800 px-2 py-1 rounded-full text-sm"
+              >
+                {skill.name}
+                <X
+                  className="ml-1 cursor-pointer"
+                  onClick={() => handleRemoveExpertise(skill.id)}
+                  size={14}
+                />
+              </div>
+            ))}
+          </div>
+          <p className="text-gray-500 text-xs mt-1">Click to add expertise as tags</p>
+        </div>
 
         {/* Other Fields */}
         <div className="grid grid-cols-2 gap-3">
@@ -197,7 +189,7 @@ export default function MentorSetupPage() {
             <input
               type="number"
               value={hourlyRate}
-              onChange={e => setHourlyRate(e.target.value)}
+              onChange={(e) => setHourlyRate(e.target.value)}
               placeholder="1500"
               className="w-full border border-gray-300 text-gray-700 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-orange-400"
             />
@@ -207,7 +199,7 @@ export default function MentorSetupPage() {
             <input
               type="text"
               value={experience}
-              onChange={e => setExperience(e.target.value)}
+              onChange={(e) => setExperience(e.target.value)}
               placeholder="5 years"
               className="w-full border border-gray-300 placeholder-gray-400 text-gray-700 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-orange-400"
             />
@@ -217,7 +209,7 @@ export default function MentorSetupPage() {
             <input
               type="text"
               value={location}
-              onChange={e => setLocation(e.target.value)}
+              onChange={(e) => setLocation(e.target.value)}
               placeholder="City, Country"
               className="w-full border border-gray-300 placeholder-gray-400 text-gray-700 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-orange-400"
             />
@@ -227,7 +219,7 @@ export default function MentorSetupPage() {
             <input
               type="text"
               value={responseTime}
-              onChange={e => setResponseTime(e.target.value)}
+              onChange={(e) => setResponseTime(e.target.value)}
               placeholder="Within 24 hours"
               className="w-full border border-gray-300 placeholder-gray-400 text-gray-700 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-orange-400"
             />

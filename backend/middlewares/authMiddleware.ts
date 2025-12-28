@@ -10,39 +10,55 @@ export interface AuthRequest extends Request {
     id: string;
     email: string;
     name: string;
-    role: "student" | "mentor";
+    role: "student" | "mentor" | "admin";
     profile_picture?: string;
+    status?: "pending" | "accepted" | "rejected" | "suspended"; // only for mentors
   };
 }
 
 interface JwtPayload {
   id: string;
   email: string;
-  role: "student" | "mentor";
+  role: "student" | "mentor" | "admin";
 }
 
-export const authenticate = async (req: AuthRequest, res: Response, next: NextFunction) => {
-  // Check student or mentor cookie
+export const authenticate = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) => {
   const token =
-    req.cookies?.student_auth_token ||
-    req.cookies?.mentor_auth_token ||
-    req.headers.authorization?.split(" ")[1];
+    req.cookies?.auth_token ||
+    (req.headers.authorization?.startsWith("Bearer ")
+      ? req.headers.authorization.split(" ")[1]
+      : null);
 
   if (!token) return res.status(401).json({ message: "Unauthorized" });
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
 
-    const { rows } = await pgPool.query(
+    const { rows: userRows } = await pgPool.query(
       `SELECT id, email, COALESCE(name,'') AS name, role, profile_picture
        FROM users
        WHERE id = $1`,
       [decoded.id]
     );
 
-    if (!rows[0]) return res.status(401).json({ message: "User not found" });
+    if (!userRows.length) return res.status(401).json({ message: "User not found" });
 
-    req.user = rows[0];
+    const user = userRows[0];
+
+    if (user.role === "mentor") {
+      const { rows: mentorRows } = await pgPool.query(
+        `SELECT status, verified_at FROM mentors WHERE user_id = $1`,
+        [user.id]
+      );
+      user.status = mentorRows.length ? mentorRows[0].status : "pending";
+      (user as any).verified_at = mentorRows.length ? mentorRows[0].verified_at : null;
+    }
+
+    req.user = user;
     next();
   } catch (err) {
     console.error("JWT verify error:", err);

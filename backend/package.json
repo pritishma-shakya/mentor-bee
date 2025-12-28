@@ -26,11 +26,12 @@
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.18",
     "@types/jsonwebtoken": "^9.0.5",
+    "@types/node": "^25.0.3",
     "@types/passport-google-oauth20": "^2.0.17",
     "@types/pg": "^8.10.7",
     "nodemon": "^3.0.1",
-    "ts-node": "^10.9.1",
+    "ts-node": "^10.9.2",
     "tsx": "^4.20.6",
-    "typescript": "^5.2.2"
+    "typescript": "^5.9.3"
   }
 }

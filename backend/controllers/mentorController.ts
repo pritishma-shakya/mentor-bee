@@ -36,15 +36,14 @@ export const setupMentorProfile = async (req: AuthRequest, res: Response) => {
   try {
     await client.query("BEGIN");
 
-    // Insert mentor record
     const { rows } = await client.query(
       `INSERT INTO mentors (user_id, bio, experience, location, response_time, hourly_rate)
        VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
       [req.user.id, bio, experience, location, responseTime || null, hourlyRate || null]
     );
+
     const mentorId = rows[0].id;
 
-    // Insert mentor_expertise links
     for (const id of expertiseIds) {
       await client.query(
         "INSERT INTO mentor_expertise (mentor_id, expertise_id) VALUES ($1,$2)",
@@ -72,12 +71,10 @@ export const updateMentorProfile = async (req: AuthRequest, res: Response) => {
   }
 
   const { bio, experience, location, hourlyRate, responseTime, expertiseIds } = req.body;
-
   const client = await pgPool.connect();
   try {
     await client.query("BEGIN");
 
-    // Update mentor info
     const { rows } = await client.query(
       `UPDATE mentors
        SET bio = $1, experience = $2, location = $3, hourly_rate = $4, response_time = $5, updated_at = NOW()
@@ -92,7 +89,6 @@ export const updateMentorProfile = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ success: false, message: "Mentor not found" });
     }
 
-    // Update expertise if provided
     if (Array.isArray(expertiseIds)) {
       await client.query("DELETE FROM mentor_expertise WHERE mentor_id = $1", [mentor.id]);
       for (const id of expertiseIds) {
@@ -119,25 +115,17 @@ export const updateMentorProfile = async (req: AuthRequest, res: Response) => {
 // =====================
 export const getMentorProfile = async (req: AuthRequest, res: Response) => {
   const { mentorId } = req.params;
-
-  // Validate UUID
-  if (!/^[0-9a-fA-F-]{36}$/.test(mentorId)) {
-    return res.status(400).json({ success: false, message: "Invalid mentor ID" });
-  }
-
   const client = await pgPool.connect();
   try {
     const { rows } = await client.query(
-      `SELECT m.*, u.name AS full_name, u.email
+      `SELECT m.*, u.name AS full_name, u.email, u.profile_picture, u."status"
        FROM mentors m
        JOIN users u ON m.user_id = u.id
        WHERE m.id = $1`,
       [mentorId]
     );
 
-    if (rows.length === 0) {
-      return res.status(404).json({ success: false, message: "Mentor not found" });
-    }
+    if (rows.length === 0) return res.status(404).json({ success: false, message: "Mentor not found" });
 
     const mentor = rows[0];
 
@@ -166,17 +154,14 @@ export const listMentors = async (_req: AuthRequest, res: Response) => {
   const client = await pgPool.connect();
   try {
     const { rows: mentors } = await client.query(
-      `SELECT m.*, u.name AS full_name, u.email
+      `SELECT m.*, u.name AS full_name, u.email, u.profile_picture, u."status"
        FROM mentors m
        JOIN users u ON m.user_id = u.id
        ORDER BY m.created_at DESC`
     );
 
-    if (mentors.length === 0) {
-      return res.json({ success: true, data: [] });
-    }
+    if (mentors.length === 0) return res.json({ success: true, data: [] });
 
-    // Fetch expertise for all mentors
     const mentorIds = mentors.map(m => m.id);
     const { rows: expertiseRows } = await client.query(
       `SELECT me.mentor_id, e.id AS expertise_id, e.name

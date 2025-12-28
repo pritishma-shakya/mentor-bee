@@ -16,6 +16,7 @@ frontend/out/
 
 # Backend (if TypeScript)
 backend/dist/
+backend/create-admin.ts
 
 # Prisma
 backend/prisma/dev.db
