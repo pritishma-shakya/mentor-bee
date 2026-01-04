@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Sidebar from "@/components/sidebar";
-import HeaderBar from "@/components/header-bar";
 import { toast } from "react-hot-toast";
+import AuthLayout from "../layout"; // adjust path if needed
 
 interface User {
   id: string;
@@ -55,26 +54,22 @@ export default function MessagesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      <Sidebar />
-
-      <main className="flex-1 ml-64 px-6 py-5 max-w-7xl mx-auto">
-        <HeaderBar
-          user={user}
-          title="Messages"
-          subtitle="Chat with mentors and stay connected"
-        />
-
-        {/* Page Content */}
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 mt-5">
-          <h2 className="text-lg font-semibold text-gray-900">
-            Messages Page
-          </h2>
-          <p className="text-sm text-gray-600 mt-1">
-            Your conversations will appear here.
-          </p>
-        </div>
-      </main>
-    </div>
+    <AuthLayout
+      header={{
+        title: "Messages",
+        subtitle: "Chat with mentors and stay connected",
+        showSearch: false,
+      }}
+    >
+      {/* Page Content */}
+      <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 mt-5">
+        <h2 className="text-lg font-semibold text-gray-900">
+          Messages Page
+        </h2>
+        <p className="text-sm text-gray-600 mt-1">
+          Your conversations will appear here.
+        </p>
+      </div>
+    </AuthLayout>
   );
 }

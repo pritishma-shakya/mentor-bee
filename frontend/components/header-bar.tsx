@@ -10,7 +10,7 @@ interface UserProps {
   profile_picture?: string;
 }
 
-interface HeaderBarProps {
+export interface HeaderBarProps {
   user: UserProps | null;
   title: string;
   subtitle?: string;

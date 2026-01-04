@@ -8,6 +8,7 @@ import authRoutes from "./routes/authRoutes";
 import mentorRoutes from "./routes/mentorRoutes";
 import studentRoutes from "./routes/studentRoutes";
 import adminRoutes from "./routes/adminRoutes";
+import communityRoutes from "./routes/communityRoutes";
 
 dotenv.config();
 
@@ -36,6 +37,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/mentors", mentorRoutes);
 app.use("/api/students", studentRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/community", communityRoutes);
 
 /* ================= DEFAULT ROUTE ================= */
 

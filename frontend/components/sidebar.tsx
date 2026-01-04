@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import Link from "next/link";
 import {
   Home,
   Calendar,
@@ -16,6 +16,7 @@ import {
   BarChart3,
   Shield,
 } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 
 interface User {
@@ -52,15 +53,7 @@ export default function Sidebar() {
         }
 
         const data = await res.json();
-        const userData = data.user || data;
-
-        if (!userData || !userData.role) {
-          toast.error("Invalid session. Please login again.");
-          router.push("/login");
-          return;
-        }
-
-        setUser(userData);
+        setUser(data.user || null);
       } catch (err) {
         console.error("Failed to fetch profile:", err);
         toast.error("Session expired. Please login again.");
@@ -72,6 +65,9 @@ export default function Sidebar() {
 
     fetchUser();
   }, [router]);
+
+  if (loading) return null;
+  if (!user) return null;
 
   const studentNav: NavItem[] = [
     { icon: Home, label: "Home", path: "/home" },
@@ -104,9 +100,9 @@ export default function Sidebar() {
   ];
 
   const navItems =
-    user?.role === "student" ? studentNav :
-    user?.role === "mentor" ? mentorNav :
-    user?.role === "admin" ? adminNav : [];
+    user.role === "student" ? studentNav :
+    user.role === "mentor" ? mentorNav :
+    user.role === "admin" ? adminNav : [];
 
   const handleLogout = async () => {
     try {
@@ -115,26 +111,15 @@ export default function Sidebar() {
         credentials: "include",
       });
       toast.success("Logged out successfully!");
-    } catch (err) {
+    } catch {
       toast.error("Logout failed, redirecting anyway...");
     } finally {
       router.push("/login");
     }
   };
 
-  if (loading) {
-    return (
-      <div className="fixed inset-y-0 left-0 w-60 bg-white shadow-md flex items-center justify-center">
-        <p className="text-gray-500">Loading...</p>
-      </div>
-    );
-  }
-
-  if (!user) return null;
-
   return (
     <div className="fixed inset-y-0 left-0 w-60 bg-white shadow-lg p-5 flex flex-col overflow-y-auto border-r border-gray-100">
-      {/* Logo & User */}
       <div className="mb-8 text-center">
         <img
           src="/images/mentor-bee-logo.png"
@@ -145,14 +130,13 @@ export default function Sidebar() {
         />
       </div>
 
-      {/* Navigation */}
       <nav className="flex-1 space-y-1">
         {navItems.map((item) => {
           const isActive = pathname === item.path || pathname.startsWith(item.path);
           return (
-            <button
+            <Link
               key={item.label}
-              onClick={() => router.push(item.path)}
+              href={item.path}
               className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all
                 ${isActive
                   ? "bg-orange-50 text-orange-600 border border-orange-200 shadow-sm"
@@ -161,12 +145,11 @@ export default function Sidebar() {
             >
               <item.icon className="w-5 h-5" />
               {item.label}
-            </button>
+            </Link>
           );
         })}
       </nav>
 
-      {/* Logout */}
       <button
         onClick={handleLogout}
         className="mt-auto w-full flex items-center gap-3 px-4 py-2.5 text-red-600 hover:bg-red-50 rounded-lg text-sm font-medium transition"

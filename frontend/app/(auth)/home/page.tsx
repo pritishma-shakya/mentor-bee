@@ -1,11 +1,11 @@
 "use client";
+
 import { useEffect, useState } from "react";
-import toast, { Toaster } from "react-hot-toast";
-import Sidebar from "@/components/sidebar";
+import toast from "react-hot-toast";
+import AuthLayout from "../layout"; // Adjust path if needed
 import SessionCard from "@/components/session-card";
 import MentorCard from "@/components/mentor-card";
 import { Plus } from "lucide-react";
-import HeaderBar from "@/components/header-bar";
 
 interface User {
   id: string;
@@ -44,17 +44,14 @@ export default function HomePage() {
   useEffect(() => {
     const fetchAll = async () => {
       try {
-        const profileRes = await fetch("http://localhost:5000/api/auth/profile", {
-          credentials: "include",
-        });
+        // Fetch user
+        const profileRes = await fetch("http://localhost:5000/api/auth/profile", { credentials: "include" });
         if (!profileRes.ok) throw new Error("Unauthorized");
-
         const profileData = await profileRes.json();
-        setUser(profileData.user); 
+        setUser(profileData.user);
 
-        const mentorsRes = await fetch("http://localhost:5000/api/mentors", {
-          credentials: "include",
-        });
+        // Fetch mentors
+        const mentorsRes = await fetch("http://localhost:5000/api/mentors", { credentials: "include" });
         const mentorsData = await mentorsRes.json();
         if (mentorsData.success && mentorsData.data) {
           setMentors(
@@ -66,15 +63,13 @@ export default function HomePage() {
           );
         }
 
-        const goalsRes = await fetch("http://localhost:5000/api/students/learning-goals", {
-          credentials: "include",
-        });
+        // Fetch learning goals
+        const goalsRes = await fetch("http://localhost:5000/api/students/learning-goals", { credentials: "include" });
         const goalsData = await goalsRes.json();
         if (goalsData.success && goalsData.data) setLearningGoals(goalsData.data);
 
-        const rewardsRes = await fetch("http://localhost:5000/api/students/rewards", {
-          credentials: "include",
-        });
+        // Fetch summary/rewards
+        const rewardsRes = await fetch("http://localhost:5000/api/students/rewards", { credentials: "include" });
         const rewardsData = await rewardsRes.json();
         if (rewardsData.success && rewardsData.data) {
           setSummary({
@@ -84,7 +79,7 @@ export default function HomePage() {
           });
         }
       } catch (err) {
-        console.error("Failed to fetch data:", err);
+        console.error(err);
         toast.error("Failed to fetch data");
       } finally {
         setLoading(false);
@@ -94,35 +89,42 @@ export default function HomePage() {
     fetchAll();
   }, []);
 
-
   const sessions = [
     { mentor: "Alice Smith", date: "Sun, Nov 9", time: "1:00 PM – 2:00 PM" },
     { mentor: "Robert King", date: "Tue, Nov 11", time: "4:00 PM – 5:00 PM" },
   ];
 
+  if (loading)
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        Loading...
+      </div>
+    );
+
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      <Toaster position="top-right" />
-      <Sidebar />
-      <div className="flex-1 px-6 py-5 ml-60">
-        <HeaderBar
-          user={user}
-          title={user ? `Welcome Back, ${user.name}!` : "Hello, Student!"}
-          subtitle="Keep learning and growing today!"
-        />
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          <div className="lg:col-span-2 space-y-5">
-            {sessions.map((s, i) => <SessionCard key={i} session={s} />)}
-            <RecommendedMentors mentors={mentors} loading={loading} />
-          </div>
-          <div className="space-y-5 w-full">
-            <Summary summary={summary} />
-            <Rewards points={summary.points} />
-            <LearningGoals goals={learningGoals} setGoals={setLearningGoals} />
-          </div>
+    <AuthLayout
+      header={{
+        title: user ? `Welcome Back, ${user.name}!` : "Hello, Student!",
+        subtitle: "Keep learning and growing today!",
+        showSearch: false,
+        user,
+      }}
+    >
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mt-5">
+        {/* Left/Main Column */}
+        <div className="lg:col-span-2 space-y-5">
+          {sessions.map((s, i) => <SessionCard key={i} session={s} />)}
+          <RecommendedMentors mentors={mentors} loading={loading} />
+        </div>
+
+        {/* Right Column */}
+        <div className="space-y-5 w-full">
+          <Summary summary={summary} />
+          <Rewards points={summary.points} />
+          <LearningGoals goals={learningGoals} setGoals={setLearningGoals} />
         </div>
       </div>
-    </div>
+    </AuthLayout>
   );
 }
 
@@ -217,9 +219,7 @@ function LearningGoals({ goals, setGoals }: { goals: LearningGoal[]; setGoals: (
         setNewTime("");
         setShowModal(false);
         toast.success("Learning goal added!");
-      } else {
-        toast.error(data.message || "Failed to add learning goal");
-      }
+      } else toast.error(data.message || "Failed to add learning goal");
     } catch (err) {
       console.error(err);
       toast.error("Failed to add learning goal");

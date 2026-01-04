@@ -2,9 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { Trophy, Gift, Crown, Medal, Zap, Coffee, Calendar, Sunrise } from "lucide-react";
-import Sidebar from "@/components/sidebar";
-import HeaderBar from "@/components/header-bar";
 import { toast } from "react-hot-toast";
+import AuthLayout from "../layout"; // adjust path if needed
 
 interface Badge {
   name: string;
@@ -49,22 +48,11 @@ export default function RewardsPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const userRes = await fetch("http://localhost:5000/api/auth/profile", {
-          credentials: "include",
-        });
-
+        const userRes = await fetch("http://localhost:5000/api/auth/profile", { credentials: "include" });
         if (!userRes.ok) throw new Error("Unauthorized");
-
         const userData = await userRes.json();
+        setUser(userData?.user || null);
 
-        if (userData?.user) {
-          setUser(userData.user);
-        } else {
-          setUser(null);
-          console.warn("User data missing or not authenticated", userData);
-        }
-
-        // Fetch rewards
         const rewardsRes = await fetch("http://localhost:5000/api/students/rewards", { credentials: "include" });
         const rewardsData = await rewardsRes.json();
         if (rewardsData.success) {
@@ -78,11 +66,9 @@ export default function RewardsPage() {
         setLoading(false);
       }
     };
-
     fetchData();
   }, []);
 
-  // Compute badges
   const badges = badgeThresholds.map((b, i) => {
     const prevPoints = badgeThresholds[i - 1]?.points || 0;
     const earned = totalPoints >= b.points;
@@ -96,14 +82,9 @@ export default function RewardsPage() {
   if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      <Sidebar />
-      <main className="flex-1 ml-60 px-6 py-5 max-w-7xl mx-auto">
-        <HeaderBar 
-          user={user} 
-          title="Rewards & Achievements" 
-          subtitle="Earn points and unlock badges as you progress!" 
-        />
+    <AuthLayout 
+      header={{ title: "Rewards & Achievements", subtitle: "Earn points and unlock badges as you progress!" }}
+    >
         {/* Main Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left: Total points, progress, badges */}
@@ -228,7 +209,6 @@ export default function RewardsPage() {
             </div>
           </div>
         </div>
-      </main>
-    </div>
+    </AuthLayout> 
   );
 }

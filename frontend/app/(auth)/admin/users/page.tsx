@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Sidebar from "@/components/sidebar";
-import HeaderBar from "@/components/header-bar";
 import { User as UserIcon } from "lucide-react";
+import toast from "react-hot-toast";
+import AuthLayout from "../../layout"; // adjust the path if needed
 
 interface User {
   id: string;
@@ -23,13 +23,17 @@ export default function AdminUsersPage() {
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
-    fetch("http://localhost:5000/api/auth/profile", { credentials: "include" })
-      .then(res => res.json())
-      .then(data => setUser(data.user))
-      .catch(console.error);
-  }, []);
+    const fetchProfile = async () => {
+      try {
+        const res = await fetch("http://localhost:5000/api/auth/profile", { credentials: "include" });
+        const data = await res.json();
+        setUser(data.user);
+      } catch (err) {
+        console.error(err);
+        toast.error("Failed to fetch profile");
+      }
+    };
 
-  useEffect(() => {
     const fetchData = async () => {
       try {
         const [studentsRes, mentorsRes] = await Promise.all([
@@ -44,10 +48,13 @@ export default function AdminUsersPage() {
         setMentors(mentorsData.data || []);
       } catch (err) {
         console.error(err);
+        toast.error("Failed to fetch users");
       } finally {
         setLoading(false);
       }
     };
+
+    fetchProfile();
     fetchData();
   }, []);
 
@@ -73,7 +80,7 @@ export default function AdminUsersPage() {
             {isMentor && <td className="text-gray-500">{u.status || "-"}</td>}
             {isMentor && (
               <td className="text-gray-500">
-                {u.verified_at ? new Date(u.verified_at).toLocaleString() : "-"}
+                {u.verified_at ? new Date(u.verified_at).toLocaleDateString() : "-"}
               </td>
             )}
             <td className="text-gray-500">
@@ -86,39 +93,39 @@ export default function AdminUsersPage() {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      <Sidebar />
-      <div className="flex-1 px-6 py-5 ml-60">
-        <HeaderBar user={user} title="All Users" subtitle="Manage all students and mentors" />
-
-        {/* Tabs like Explore page */}
-        <div className="flex items-center gap-6 border-b border-gray-200 mb-5">
-          {["students", "mentors"].map(t => (
-            <button
-              key={t}
-              onClick={() => setTab(t as any)}
-              className={`pb-2 px-1 text-sm font-medium relative transition-colors ${
-                tab === t ? "text-orange-600" : "text-gray-600 hover:text-gray-900"
-              }`}
-            >
-              {t === "students" ? "Students" : "Mentors"}
-              {tab === t && (
-                <span className="absolute bottom-0 left-0 w-full h-0.5 bg-orange-500 rounded-full" />
-              )}
-            </button>
-          ))}
-        </div>
-
-        <div className="bg-white rounded-lg shadow border border-gray-100 p-5">
-          {loading ? (
-            <p className="text-center text-gray-500 py-10">Loading...</p>
-          ) : tab === "students" ? (
-            renderTable(students)
-          ) : (
-            renderTable(mentors, true)
-          )}
-        </div>
+    <AuthLayout
+      header={{
+        title: "All Users",
+        subtitle: "Manage all students and mentors",
+      }}
+    >
+      {/* Tabs */}
+      <div className="flex items-center gap-6 border-b border-gray-200 mb-5">
+        {["students", "mentors"].map(t => (
+          <button
+            key={t}
+            onClick={() => setTab(t as any)}
+            className={`pb-2 px-1 text-sm font-medium relative transition-colors ${
+              tab === t ? "text-orange-600" : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            {t === "students" ? "Students" : "Mentors"}
+            {tab === t && (
+              <span className="absolute bottom-0 left-0 w-full h-0.5 bg-orange-500 rounded-full" />
+            )}
+          </button>
+        ))}
       </div>
-    </div>
+
+      <div className="bg-white rounded-lg shadow border border-gray-100 p-5">
+        {loading ? (
+          <p className="text-center text-gray-500 py-10">Loading...</p>
+        ) : tab === "students" ? (
+          renderTable(students)
+        ) : (
+          renderTable(mentors, true)
+        )}
+      </div>
+    </AuthLayout>
   );
 }

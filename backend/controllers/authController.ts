@@ -56,7 +56,7 @@ export const signup = async (req: AuthRequest, res: Response) => {
     // set separate cookie
     if (user.role === "student") res.cookie("student_auth_token", token, authCookieOptions);
     else if (user.role === "mentor") res.cookie("mentor_auth_token", token, authCookieOptions);
-    else res.cookie("auth_token", token, authCookieOptions);
+    else res.cookie("admin_auth_token", token, authCookieOptions);
 
     await client.query("COMMIT");
 
@@ -96,7 +96,7 @@ export const login = async (req: AuthRequest, res: Response) => {
     // set new cookie based on role
     if (user.role === "student") res.cookie("student_auth_token", token, authCookieOptions);
     else if (user.role === "mentor") res.cookie("mentor_auth_token", token, authCookieOptions);
-    else res.cookie("auth_token", token, authCookieOptions);
+    else res.cookie("admin_auth_token", token, authCookieOptions);
 
     res.json({
       success: true,
@@ -112,7 +112,7 @@ export const login = async (req: AuthRequest, res: Response) => {
 export const logout = (_req: AuthRequest, res: Response) => {
   res.clearCookie("student_auth_token", clearCookieOptions);
   res.clearCookie("mentor_auth_token", clearCookieOptions);
-  res.clearCookie("auth_token", clearCookieOptions);
+  res.clearCookie("admin_auth_token", clearCookieOptions);
   res.json({ success: true, message: "Logged out successfully" });
 };
 

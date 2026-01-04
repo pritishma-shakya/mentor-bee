@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import Sidebar from "@/components/sidebar";
 import Image from "next/image";
-import { Star, Calendar, Trophy, Users, Clock } from "lucide-react";
+import { Star } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
+import AuthLayout from "../layout"; // adjust path if needed
 
 interface Review {
   reviewer: string;
@@ -45,60 +45,59 @@ export default function MentorProfilePage() {
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
 
   const mentor: Mentor = {
-  name: "Sarah Johnson",
-  expertise: "Senior Frontend Engineer & Mentor",
-  bio: "10+ years experience in building scalable applications with React, Next.js, and modern frontend ecosystems. Passionate about mentoring developers.",
-  rating: 4.92,
-  price: 35,
-  achievements: [
-    "Certified React Developer (Meta)",
-    "Top Mentor Award 2023",
-    "100+ Successful Students",
-    "Ex-Google Frontend Engineer",
-    "GitHub Star Contributor"
-  ],
-  reputationPoints: 1520,
-  overview: "I specialize in helping developers transition from intermediate to advanced React concepts. My mentorship focuses on real-world projects, performance optimization, and career growth.",
-  schedule: [
-    { day: "Mon", slots: ["10:00 AM", "11:00 AM", "2:00 PM", "3:00 PM"] },
-    { day: "Tue", slots: ["9:00 AM", "11:00 AM", "1:00 PM"] },
-    { day: "Wed", slots: ["10:00 AM", "12:00 PM", "2:00 PM", "4:00 PM"] },
-    { day: "Thu", slots: ["11:00 AM", "3:00 PM", "4:00 PM"] },
-    { day: "Fri", slots: ["9:00 AM", "1:00 PM", "3:00 PM"] },
-  ],
-  reviews: [
-    { 
-      reviewer: "Alex Chen", 
-      comment: "Sarah transformed my approach to React. Her code reviews are incredibly detailed and helped me land a senior role!", 
-      rating: 5,
-      date: "2 weeks ago",
-      avatar: "https://randomuser.me/api/portraits/men/32.jpg"
-    },
-    { 
-      reviewer: "Maria Rodriguez", 
-      comment: "Patient, knowledgeable, and always prepared. Best investment I've made in my career.", 
-      rating: 4.8,
-      date: "1 month ago",
-      avatar: "https://randomuser.me/api/portraits/women/26.jpg"
-    },
-    { 
-      reviewer: "David Kim", 
-      comment: "The Next.js deep dive sessions were game-changing. Sarah explains complex concepts with clarity.", 
-      rating: 5,
-      date: "3 weeks ago",
-      avatar: "https://randomuser.me/api/portraits/men/22.jpg"
-    },
-  ],
-  profile_picture: "https://randomuser.me/api/portraits/women/44.jpg", // updated image
-  tags: ["React", "Next.js 14", "TypeScript", "Tailwind CSS", "Performance", "Testing", "Career Growth"],
-  experience: "12 years",
-  location: "San Francisco, CA",
-  students: 143,
-  sessions: 856,
-  responseTime: "Within 2 hours",
-  verified: true,
-};
-
+    name: "Sarah Johnson",
+    expertise: "Senior Frontend Engineer & Mentor",
+    bio: "10+ years experience in building scalable applications with React, Next.js, and modern frontend ecosystems. Passionate about mentoring developers.",
+    rating: 4.92,
+    price: 35,
+    achievements: [
+      "Certified React Developer (Meta)",
+      "Top Mentor Award 2023",
+      "100+ Successful Students",
+      "Ex-Google Frontend Engineer",
+      "GitHub Star Contributor"
+    ],
+    reputationPoints: 1520,
+    overview: "I specialize in helping developers transition from intermediate to advanced React concepts. My mentorship focuses on real-world projects, performance optimization, and career growth.",
+    schedule: [
+      { day: "Mon", slots: ["10:00 AM", "11:00 AM", "2:00 PM", "3:00 PM"] },
+      { day: "Tue", slots: ["9:00 AM", "11:00 AM", "1:00 PM"] },
+      { day: "Wed", slots: ["10:00 AM", "12:00 PM", "2:00 PM", "4:00 PM"] },
+      { day: "Thu", slots: ["11:00 AM", "3:00 PM", "4:00 PM"] },
+      { day: "Fri", slots: ["9:00 AM", "1:00 PM", "3:00 PM"] },
+    ],
+    reviews: [
+      { 
+        reviewer: "Alex Chen", 
+        comment: "Sarah transformed my approach to React. Her code reviews are incredibly detailed and helped me land a senior role!", 
+        rating: 5,
+        date: "2 weeks ago",
+        avatar: "https://randomuser.me/api/portraits/men/32.jpg"
+      },
+      { 
+        reviewer: "Maria Rodriguez", 
+        comment: "Patient, knowledgeable, and always prepared. Best investment I've made in my career.", 
+        rating: 4.8,
+        date: "1 month ago",
+        avatar: "https://randomuser.me/api/portraits/women/26.jpg"
+      },
+      { 
+        reviewer: "David Kim", 
+        comment: "The Next.js deep dive sessions were game-changing. Sarah explains complex concepts with clarity.", 
+        rating: 5,
+        date: "3 weeks ago",
+        avatar: "https://randomuser.me/api/portraits/men/22.jpg"
+      },
+    ],
+    profile_picture: "https://randomuser.me/api/portraits/women/44.jpg",
+    tags: ["React", "Next.js 14", "TypeScript", "Tailwind CSS", "Performance", "Testing", "Career Growth"],
+    experience: "12 years",
+    location: "San Francisco, CA",
+    students: 143,
+    sessions: 856,
+    responseTime: "Within 2 hours",
+    verified: true,
+  };
 
   const timeSlots = mentor.schedule.find(d => d.day === selectedDay)?.slots || [];
 
@@ -108,13 +107,16 @@ export default function MentorProfilePage() {
   };
 
   return (
-    <div className="min-h-screen flex bg-gray-50">
+    <AuthLayout
+      header={{
+        title: "Mentor Profile",
+        subtitle: "Learn more about your mentor and book sessions",
+      }}
+    >
       <Toaster />
-      <Sidebar />
-
-      <main className="flex-1 p-6 ml-60">
-        {/* Mentor Header */}
-        <div className="flex flex-col md:flex-row gap-4 items-center mb-6">
+      <div className="flex flex-col gap-6">
+        {/* Header with Image, Rating, Location, Rate */}
+        <div className="flex flex-col md:flex-row gap-4 items-center">
           <div className="w-24 h-24 md:w-32 md:h-32 rounded-lg overflow-hidden">
             <Image
               src={mentor.profile_picture}
@@ -143,20 +145,20 @@ export default function MentorProfilePage() {
         </div>
 
         {/* Tags */}
-        <div className="flex flex-wrap gap-2 mb-6">
+        <div className="flex flex-wrap gap-2">
           {mentor.tags.map(tag => (
             <span key={tag} className="px-3 py-1 bg-gray-200 text-gray-700 text-sm rounded-lg">{tag}</span>
           ))}
         </div>
 
         {/* Overview */}
-        <div className="bg-white rounded-lg p-4 mb-6 shadow-sm border border-gray-100">
+        <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
           <h2 className="font-semibold text-gray-900 mb-2">About</h2>
           <p className="text-gray-700 text-sm">{mentor.overview}</p>
         </div>
 
         {/* Achievements */}
-        <div className="bg-white rounded-lg p-4 mb-6 shadow-sm border border-gray-100">
+        <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
           <h2 className="font-semibold text-gray-900 mb-2">Achievements</h2>
           <ul className="list-disc pl-5 text-gray-700 text-sm">
             {mentor.achievements.map(a => <li key={a}>{a}</li>)}
@@ -164,7 +166,7 @@ export default function MentorProfilePage() {
         </div>
 
         {/* Schedule & Booking */}
-        <div className="bg-white rounded-lg p-4 mb-6 shadow-sm border border-gray-100">
+        <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
           <h2 className="font-semibold text-gray-900 mb-2">Schedule</h2>
           <div className="flex gap-2 mb-3">
             {mentor.schedule.map(d => (
@@ -222,8 +224,7 @@ export default function MentorProfilePage() {
             ))}
           </div>
         </div>
-
-      </main>
-    </div>
+      </div>
+    </AuthLayout>
   );
 }
