@@ -72,7 +72,7 @@ export default function SessionsPage() {
   }
 
   return (
-    <AuthLayout header={{ title: "Your Mentorship Sessions", subtitle: "Keep learning and growing today!" }}>
+    <AuthLayout header={{ title: "Your Mentorship Sessions", subtitle: "Keep learning and growing today!", user }}>
       {/* Tabs */}
       <div className="flex gap-6 border-b border-gray-200 mb-5">
         {["Upcoming", "Pending", "History"].map((tab) => (

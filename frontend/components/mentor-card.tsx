@@ -12,6 +12,7 @@ interface MentorCardProps {
     rating: number;
     tags?: string[];
     price: number;
+    profile_picture?: string;
   };
 }
 
@@ -21,11 +22,21 @@ export default function MentorCard({ mentor }: MentorCardProps) {
   return (
     <div className="bg-white rounded-xl p-4 border shadow-sm hover:shadow-md transition-all">
       <div className="flex flex-col items-center text-center">
-        <div className="w-12 h-12 rounded-full bg-orange-500 flex items-center justify-center mb-2">
-          <User className="w-6 h-6 text-white" />
+        <div className="w-12 h-12 rounded-full flex items-center justify-center overflow-hidden bg-orange-100 border border-orange-200 shadow-sm">
+          {mentor.profile_picture ? (
+            <img
+              src={mentor.profile_picture}
+              alt={mentor.name}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <span className="text-orange-600 font-bold text-lg">
+              {mentor.name ? mentor.name[0].toUpperCase() : "?"}
+            </span>
+          )}
         </div>
-
-        <h4 className="text-sm font-semibold text-gray-900">{mentor.name}</h4>
+        
+        <h4 className="text-sm font-semibold text-gray-900 mt-2">{mentor.name}</h4>
 
         <div className="flex items-center gap-1 mt-1">
           <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
@@ -49,7 +60,7 @@ export default function MentorCard({ mentor }: MentorCardProps) {
           </div>
 
           <button
-            onClick={() => router.push(`/mentor-profile`)}
+            onClick={() => router.push(`/mentor-profile/${mentor.id}`)}
             className="py-1.5 px-2 bg-orange-500 text-white text-[10px] rounded-md font-medium"
           >
             View

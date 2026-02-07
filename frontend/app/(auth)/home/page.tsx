@@ -16,12 +16,14 @@ interface User {
 }
 interface Mentor {
   id: string;
-  full_name: string;
+  full_name: string; // from API
+  profile_picture?: string;
   expertise: { id: string; name: string }[];
   hourly_rate: string;
   rating?: number;
   tags?: string[];
 }
+
 interface LearningGoal {
   id: string;
   goal_text: string;
@@ -128,7 +130,6 @@ export default function HomePage() {
   );
 }
 
-// ---------------- Recommended Mentors ----------------
 function RecommendedMentors({ mentors, loading }: { mentors: Mentor[]; loading: boolean }) {
   if (loading) return <p className="text-gray-500">Loading mentors...</p>;
   if (!mentors || mentors.length === 0) return <p className="text-gray-500">No mentors available.</p>;
@@ -142,8 +143,9 @@ function RecommendedMentors({ mentors, loading }: { mentors: Mentor[]; loading: 
             key={m.id}
             mentor={{
               id: m.id,
-              name: m.full_name,
-              expertise: m.expertise.map(e => e.name).join(", "),
+              name: m.full_name, // required by MentorCard
+              expertise: m.expertise.map((e) => e.name).join(", "), // **pass expertise string**
+              profile_picture: m.profile_picture, // optional
               rating: m.rating || 4.8,
               tags: m.tags || [],
               price: parseFloat(m.hourly_rate),

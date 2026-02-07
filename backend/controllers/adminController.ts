@@ -66,7 +66,6 @@ export const getPendingMentorCount = async (_req: AuthRequest, res: Response) =>
   }
 };
 
-// List all mentor requests
 export const listMentorRequests = async (_req: AuthRequest, res: Response) => {
   const client = await pgPool.connect();
   try {
@@ -74,6 +73,7 @@ export const listMentorRequests = async (_req: AuthRequest, res: Response) => {
       `SELECT m.id,
               u.name AS full_name,
               u.email,
+              u.profile_picture,
               m.bio,
               m.experience,
               m.location,
@@ -85,9 +85,10 @@ export const listMentorRequests = async (_req: AuthRequest, res: Response) => {
        JOIN users u ON m.user_id = u.id
        LEFT JOIN mentor_expertise me ON me.mentor_id = m.id
        LEFT JOIN expertise e ON e.id = me.expertise_id
-       GROUP BY m.id, u.name, u.email, m.bio, m.experience, m.location, m.hourly_rate, m.response_time, m.status
+       GROUP BY m.id, u.name, u.email, u.profile_picture, m.bio, m.experience, m.location, m.hourly_rate, m.response_time, m.status
        ORDER BY m.created_at DESC`
     );
+
     res.json({ success: true, data: rows });
   } catch (err) {
     console.error("listMentorRequests error:", err);

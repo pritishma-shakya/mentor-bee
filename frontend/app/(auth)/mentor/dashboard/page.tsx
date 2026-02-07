@@ -80,6 +80,7 @@ export default function MentorDashboard() {
         title: `Welcome back, ${user.name.split(" ")[0]}!`,
         subtitle: "Manage your sessions and track your performance",
         showSearch: false,
+        user: user,
       }}
     >
       <Toaster position="top-right" />

@@ -10,7 +10,6 @@ interface Expertise {
 }
 
 export default function MentorSetupPage() {
-  const [name, setName] = useState("");
   const [bio, setBio] = useState("");
   const [expertiseList, setExpertiseList] = useState<Expertise[]>([]);
   const [allExpertise, setAllExpertise] = useState<Expertise[]>([]);
@@ -21,6 +20,7 @@ export default function MentorSetupPage() {
   const [responseTime, setResponseTime] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Fetch all available expertise options
   useEffect(() => {
     fetch("http://localhost:5000/api/mentors/expertise", {
       credentials: "include",
@@ -47,46 +47,48 @@ export default function MentorSetupPage() {
   };
 
   const handleSubmit = async () => {
-  if (!name || !bio || expertiseList.length === 0) {
-    toast.error("Please fill all required fields");
-    return;
-  }
-
-  setLoading(true);
-
-  try {
-    const res = await fetch("http://localhost:5000/api/mentors/setup", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      credentials: "include",
-      body: JSON.stringify({
-        name,
-        bio,
-        hourlyRate: hourlyRate ? parseFloat(hourlyRate) : null,
-        experience,
-        location,
-        responseTime,
-        expertiseIds: expertiseList.map((e) => e.id),
-      }),
-    });
-
-    const data = await res.json();
-
-    if (data.success) {
-      toast.success("Profile setup complete!");
-      window.location.href = "/mentor/dashboard";
-    } else {
-      toast.error(data.message || "Failed to setup profile");
+    if (!bio || expertiseList.length === 0) {
+      toast.error("Please fill all required fields");
+      return;
     }
-  } catch (err) {
-    console.error(err);
-    toast.error("Something went wrong");
-  } finally {
-    setLoading(false);
-  }
-};
+
+    setLoading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("bio", bio);
+      formData.append("experience", experience);
+      formData.append("location", location);
+      formData.append("responseTime", responseTime);
+      formData.append("hourlyRate", hourlyRate ? hourlyRate : "");
+      expertiseList.forEach((e) => formData.append("expertiseIds[]", e.id));
+
+      if (profilePicture) {
+        formData.append("profilePicture", profilePicture);
+      }
+
+      const res = await fetch("http://localhost:5000/api/mentors/setup", {
+        method: "POST",
+        credentials: "include",
+        body: formData, // FormData ensures file upload works
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        toast.success("Profile setup complete!");
+        window.location.href = "/mentor/dashboard";
+      } else {
+        toast.error(data.message || "Failed to setup profile");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Something went wrong");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <Toaster position="top-right" />
@@ -110,22 +112,10 @@ export default function MentorSetupPage() {
             )}
             <label className="absolute bottom-0 right-0 bg-orange-500 text-white rounded-full p-1 cursor-pointer hover:bg-orange-600">
               <Edit className="w-3 h-3" />
-              <input type="file" className="hidden" onChange={handleFileChange} />
+              <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
             </label>
           </div>
           <p className="text-gray-700">Upload a profile picture</p>
-        </div>
-
-        {/* Name */}
-        <div>
-          <label className="block text-gray-700 mb-1">Full Name</label>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Your full name"
-            className="w-full border border-gray-300 placeholder-gray-400 text-gray-700 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-orange-400"
-          />
         </div>
 
         {/* Bio */}

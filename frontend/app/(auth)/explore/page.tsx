@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
-import AuthLayout from "../layout"; // Make sure this path is correct
+import AuthLayout from "../layout"; // Adjust path if needed
 import MentorCard from "@/components/mentor-card";
 import { Star, Clock, Calendar, ChevronDown } from "lucide-react";
 
@@ -13,6 +13,7 @@ interface Mentor {
   hourly_rate: string;
   rating?: number;
   tags?: string[];
+  profile_picture?: string;
 }
 
 interface UserProps {
@@ -50,10 +51,10 @@ export default function ExplorePage() {
 
         if (mentorsData.success && Array.isArray(mentorsData.data)) {
           setMentors(
-            mentorsData.data.map((m: any) => ({
+            mentorsData.data.map((m: Mentor) => ({
               ...m,
               rating: m.rating || 4.8,
-              tags: m.expertise.map((e: any) => e.name),
+              tags: m.expertise.map((e) => e.name),
             }))
           );
         } else toast.error(mentorsData.message || "Failed to fetch mentors");
@@ -73,6 +74,7 @@ export default function ExplorePage() {
     { title: "React Mastery 2025", mentor: "Sarah Johnson", duration: "6h 30m", rating: 4.9, lessons: 12, level: "Intermediate", updated: "Oct 25, 2025" },
     { title: "AWS Certified Solutions Architect", mentor: "Michael Lee", duration: "8h", rating: 4.8, lessons: 15, level: "Beginner", updated: "Nov 1, 2025" },
   ];
+
   const groupSessions = [
     { title: "Live UI/UX Workshop", mentor: "Alex Chen", date: "Nov 20, 2025", time: "3:00 PM", price: 10 },
     { title: "Machine Learning Study Group", mentor: "Emily Davis", date: "Nov 22, 2025", time: "6:00 PM", price: 12 },
@@ -145,6 +147,7 @@ export default function ExplorePage() {
 
       {/* Content Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mt-6">
+        {/* Mentors Tab */}
         {activeTab === "mentors" &&
           mentors.map((m) => (
             <MentorCard
@@ -153,6 +156,7 @@ export default function ExplorePage() {
                 id: m.id,
                 name: m.full_name,
                 expertise: m.expertise.map((e) => e.name).join(", "),
+                profile_picture: m.profile_picture,
                 rating: m.rating || 4.8,
                 tags: m.tags || [],
                 price: parseFloat(m.hourly_rate),
@@ -160,6 +164,7 @@ export default function ExplorePage() {
             />
           ))}
 
+        {/* Courses Tab */}
         {activeTab === "courses" &&
           courses.map((course, i) => (
             <div key={i} className="bg-white rounded-2xl overflow-hidden border border-gray-200 shadow-sm hover:shadow-md transition cursor-pointer">
@@ -186,6 +191,7 @@ export default function ExplorePage() {
             </div>
           ))}
 
+        {/* Group Sessions Tab */}
         {activeTab === "groups" &&
           groupSessions.map((session, i) => (
             <div key={i} className="bg-white rounded-2xl overflow-hidden border border-gray-200 shadow-sm hover:shadow-md transition cursor-pointer">

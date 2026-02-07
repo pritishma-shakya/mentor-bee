@@ -1,22 +1,17 @@
 import { Router } from "express";
-import {
-  getPosts,
-  createPost,
-  reactToPost,
-  addComment,
-  getTags,
-  createTag,
-} from "../controllers/communityController";
-import { authenticate} from "../middlewares/authMiddleware";
+import multer from "multer";
+import * as communityController from "../controllers/communityController";
+import { authenticate } from "../middlewares/authMiddleware";
 
 const router = Router();
+const upload = multer({ storage: multer.memoryStorage() });
 
-// Logged-in users only
-router.get("/posts", authenticate, getPosts);
-router.post("/posts", authenticate, createPost);
-router.post("/posts/:postId/react", authenticate, reactToPost);
-router.post("/posts/:postId/comments", authenticate, addComment);
-router.get("/tags", authenticate, getTags);
-router.post("/tags", authenticate, createTag);
+router.get("/posts", authenticate, communityController.getPosts);
+router.get("/tags", authenticate, communityController.getTags);
+
+router.post("/posts", authenticate, communityController.createPost);
+router.post("/posts/:postId/react", authenticate, communityController.reactToPost);
+router.post("/posts/:postId/comments", authenticate, communityController.addComment);
+router.post("/tags", authenticate, communityController.createTag);
 
 export default router;

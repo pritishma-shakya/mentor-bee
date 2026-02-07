@@ -2,13 +2,19 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
+import http from "http";
+import { Server } from "socket.io";
 
-// Import routes
+// Routes
 import authRoutes from "./routes/authRoutes";
 import mentorRoutes from "./routes/mentorRoutes";
 import studentRoutes from "./routes/studentRoutes";
 import adminRoutes from "./routes/adminRoutes";
 import communityRoutes from "./routes/communityRoutes";
+import messageRoutes from "./routes/messageRoutes";
+
+// Socket
+import { initSocket } from "./socket";
 
 dotenv.config();
 
@@ -16,37 +22,42 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 /* ================= GLOBAL MIDDLEWARE ================= */
-
-// Parse JSON bodies
 app.use(express.json());
-
-// Parse cookies (REQUIRED for auth)
 app.use(cookieParser());
 
-// CORS — MUST allow credentials
 app.use(
   cors({
-    origin: "http://localhost:3000", // frontend URL
+    origin: "http://localhost:3000",
     credentials: true,
   })
 );
 
 /* ================= ROUTES ================= */
-
 app.use("/api/auth", authRoutes);
 app.use("/api/mentors", mentorRoutes);
 app.use("/api/students", studentRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/community", communityRoutes);
-
-/* ================= DEFAULT ROUTE ================= */
+app.use("/api/conversations", messageRoutes);
 
 app.get("/", (_req, res) => {
   res.send("Mentor Booking System Backend is running!");
 });
 
-/* ================= START SERVER ================= */
+/* ================= SOCKET.IO ================= */
+const server = http.createServer(app);
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+const io = new Server(server, {
+  cors: {
+    origin: "http://localhost:3000",
+    credentials: true,
+  },
+});
+
+// Initialize Socket.IO
+initSocket(io);
+
+/* ================= START SERVER ================= */
+server.listen(PORT, () => {
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
 });

@@ -83,7 +83,7 @@ export default function RewardsPage() {
 
   return (
     <AuthLayout 
-      header={{ title: "Rewards & Achievements", subtitle: "Earn points and unlock badges as you progress!" }}
+      header={{ title: "Rewards & Achievements", subtitle: "Earn points and unlock badges as you progress!", user }}
     >
         {/* Main Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

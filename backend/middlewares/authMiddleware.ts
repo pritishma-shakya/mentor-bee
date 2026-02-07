@@ -6,6 +6,7 @@ const JWT_SECRET = process.env.SECRET_KEY!;
 if (!JWT_SECRET) throw new Error("SECRET_KEY not set");
 
 export interface AuthRequest extends Request {
+  file?: any; 
   user?: {
     id: string;
     email: string;

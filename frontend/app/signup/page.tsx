@@ -109,7 +109,7 @@ export default function SignUpPage() {
       localStorage.setItem("role", role);
 
       // Redirect based on role
-      window.location.href = role === "mentor" ? "/mentor/setup" : "/home";
+      window.location.href = role === "mentor" ? "/setup" : "/home";
 
     } catch (error: any) {
       setGeneralError(error.message || "Something went wrong");

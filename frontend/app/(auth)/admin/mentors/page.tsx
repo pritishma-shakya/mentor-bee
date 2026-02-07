@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import toast, { Toaster } from "react-hot-toast";
 import { ChevronRight, ChevronDown, Loader2, CheckCircle, XCircle, Ban } from "lucide-react";
-import AuthLayout from "../../layout"; // adjust the path if needed
+import AuthLayout from "../../layout"; // Adjust path if needed
 
 interface Admin {
   id: string;
@@ -22,6 +22,7 @@ interface MentorRequest {
   hourly_rate?: number;
   response_time?: string;
   expertise?: string[];
+  profile_picture?: string;
   status: "pending" | "accepted" | "rejected" | "suspended";
 }
 
@@ -39,6 +40,7 @@ export default function AdminApprovalsPage() {
           credentials: "include",
         });
         if (!profileRes.ok) throw new Error("Unauthorized");
+
         const profileData = await profileRes.json();
         if (profileData.user.role !== "admin") throw new Error("Forbidden");
         setAdmin(profileData.user);
@@ -70,10 +72,10 @@ export default function AdminApprovalsPage() {
     setLoadingId(id);
 
     try {
-      const res = await fetch(
-        `http://localhost:5000/api/admin/mentor-requests/${id}/${action}`,
-        { method: "POST", credentials: "include" }
-      );
+      const res = await fetch(`http://localhost:5000/api/admin/mentor-requests/${id}/${action}`, {
+        method: "POST",
+        credentials: "include",
+      });
 
       if (!res.ok) {
         const text = await res.text();
@@ -82,17 +84,12 @@ export default function AdminApprovalsPage() {
 
       const data = await res.json();
 
-      setRequests(prev =>
-        prev.map(r => (r.id === id ? { ...r, status: data.data.status } : r))
-      );
+      setRequests(prev => prev.map(r => (r.id === id ? { ...r, status: data.data.status } : r)));
 
-      toast.success(
-        `Mentor ${action === "suspend" ? "suspended" : action + "ed"} successfully!`,
-        {
-          icon: action === "accept" ? <CheckCircle /> : action === "reject" ? <XCircle /> : <Ban />,
-        }
-      );
-    } catch (err: any) {
+      toast.success(`Mentor ${action === "suspend" ? "suspended" : action + "ed"} successfully!`, {
+        icon: action === "accept" ? <CheckCircle /> : action === "reject" ? <XCircle /> : <Ban />,
+      });
+    } catch (err) {
       console.error(err);
       toast.error("Failed to update mentor status");
     } finally {
@@ -104,7 +101,7 @@ export default function AdminApprovalsPage() {
     setExpandedIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
   };
 
-  const statusColors: Record<string, string> = {
+  const statusColors: Record<MentorRequest["status"], string> = {
     pending: "bg-yellow-100 text-yellow-800",
     accepted: "bg-green-100 text-green-800",
     rejected: "bg-red-100 text-red-800",
@@ -127,7 +124,7 @@ export default function AdminApprovalsPage() {
           <p className="text-gray-500 text-center py-6">No mentor requests found.</p>
         )}
 
-        {requests.map(r => {
+        {requests.map((r) => {
           const expanded = expandedIds.includes(r.id);
           const isLoading = loadingId === r.id;
 
@@ -137,10 +134,18 @@ export default function AdminApprovalsPage() {
               className="bg-white rounded-2xl shadow-md p-6 border border-gray-100 hover:shadow-xl transition-shadow duration-300 w-full"
             >
               {/* Summary Row */}
-              <div className="flex items-center justify-between px-0 pb-4">
+              <div className="flex items-center justify-between pb-4">
                 <div className="flex items-center gap-4 flex-1">
-                  <div className="w-14 h-14 bg-orange-100 rounded-full flex items-center justify-center text-orange-600 font-bold text-xl">
-                    {r.full_name ? r.full_name[0].toUpperCase() : "?"}
+                  <div className="w-14 h-14 rounded-full flex items-center justify-center bg-orange-100 text-orange-600 font-bold text-xl overflow-hidden">
+                    {r.profile_picture ? (
+                      <img
+                        src={r.profile_picture}
+                        alt={r.full_name || "Mentor"}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      r.full_name ? r.full_name[0].toUpperCase() : "?"
+                    )}
                   </div>
                   <div className="flex-1">
                     <h3 className="font-semibold text-gray-900 text-lg">{r.full_name || "N/A"}</h3>

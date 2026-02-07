@@ -84,6 +84,7 @@ export default function Sidebar() {
     { icon: Calendar, label: "My Sessions", path: "/mentor/sessions" },
     { icon: MessageCircle, label: "Messages", path: "/messages" },
     { icon: UserCheck, label: "My Students", path: "/mentor/students" },
+    { icon: Users, label: "My Community", path: "/community" },
     { icon: DollarSign, label: "Earnings", path: "/mentor/earnings" },
     { icon: Trophy, label: "Ratings & Reviews", path: "/mentor/reviews" },
     { icon: Settings, label: "Settings", path: "/settings" },

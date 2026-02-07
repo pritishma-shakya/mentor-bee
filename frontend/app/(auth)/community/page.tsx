@@ -389,7 +389,7 @@ export default function CommunityPage() {
                       value={newTagInput}
                       onChange={(e) => setNewTagInput(e.target.value)}
                       placeholder="New tag..."
-                      className="border border-gray-200 rounded px-2.5 py-1 text-sm focus:outline-none focus:border-orange-400 w-28"
+                      className="border border-gray-200 placeholder:text-gray-400 text-gray-900 rounded px-2.5 py-1 text-sm focus:outline-none focus:border-orange-400 w-28"
                       onKeyPress={(e) => e.key === 'Enter' && handleAddNewTag()}
                     />
                     <button
@@ -585,6 +585,7 @@ function PostCard({ post, user, onLike, onDislike, onAddComment }: PostCardProps
     <div className="bg-white rounded-lg shadow border border-gray-100 p-4 space-y-3 hover:shadow-md transition">
       {/* Post Header */}
       <div className="flex items-start gap-3">
+        {/* Profile */}
         <div className="relative w-12 h-12 flex-shrink-0">
           {post.profile_picture ? (
             <img
@@ -593,30 +594,54 @@ function PostCard({ post, user, onLike, onDislike, onAddComment }: PostCardProps
               className="w-full h-full object-cover rounded-full"
             />
           ) : (
-            <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-semibold text-lg">
+            <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-semibold text-lg">
               {post.author.charAt(0)}
             </div>
           )}
+
           {post.author_role === "mentor" && (
             <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center">
               <span className="text-xs font-bold text-white">M</span>
             </div>
           )}
         </div>
+
+        {/* Name + Time */}
         <div className="flex-1">
           <p className="font-semibold text-gray-900 text-sm">{post.author}</p>
           <p className="text-xs text-gray-500">{formatTime(post.time)}</p>
         </div>
+
+        {/* Tags on the right */}
+        {post.tag && (
+          <div className="flex flex-wrap gap-1 justify-end max-w-[40%]">
+            <span
+              className="text-xs px-2 py-0.5 rounded-full border border-orange-300 text-orange-600 bg-orange-50 whitespace-nowrap"
+            >
+              {post.tag}
+            </span>
+          </div>
+        )}
       </div>
+
 
       {/* Post Content */}
       <p className="text-gray-900 leading-relaxed text-sm">{post.content}</p>
 
       {/* Post Images */}
       {(post.images || []).length > 0 && (
-        <div className={`mt-2 grid gap-2 ${post.images?.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
-          {post.images?.map((img, i) => (
-            <img key={i} src={img} alt={`post-${post.id}-${i}`} className="rounded-lg object-cover h-44 w-full" />
+        <div
+          className={`mt-2 grid gap-2 ${
+            post.images?.length === 1 ? "grid-cols-1" : "grid-cols-2"
+          }`}
+        >
+          {post.images?.map((img: string, i: number) => (
+            <img
+              key={i}
+              src={img}
+              alt={`post-${post.id}-${i}`}
+              className="rounded-lg object-cover h-44 w-full"
+            />
           ))}
         </div>
       )}
@@ -627,7 +652,11 @@ function PostCard({ post, user, onLike, onDislike, onAddComment }: PostCardProps
         <div className="flex items-center gap-1.5">
           <button
             onClick={handleLike}
-            className={`p-1 rounded-full transition-colors ${isLiked ? "text-green-600 bg-green-50" : "text-gray-500 hover:text-green-600 hover:bg-green-50"}`}
+            className={`p-1 rounded-full transition-colors ${
+              isLiked
+                ? "text-green-600 bg-green-50"
+                : "text-gray-500 hover:text-green-600 hover:bg-green-50"
+            }`}
           >
             <ThumbsUp className="w-4 h-4" />
           </button>
@@ -638,43 +667,55 @@ function PostCard({ post, user, onLike, onDislike, onAddComment }: PostCardProps
         <div className="flex items-center gap-1.5">
           <button
             onClick={handleDislike}
-            className={`p-1 rounded-full transition-colors ${isDisliked ? "text-red-600 bg-red-50" : "text-gray-500 hover:text-red-600 hover:bg-red-50"}`}
+            className={`p-1 rounded-full transition-colors ${
+              isDisliked
+                ? "text-red-600 bg-red-50"
+                : "text-gray-500 hover:text-red-600 hover:bg-red-50"
+            }`}
           >
             <ThumbsDown className="w-4 h-4" />
           </button>
           <span className="text-xs text-gray-600">{post.dislikes}</span>
         </div>
 
-        {/* Comment Icon */}
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => setShowCommentInput(!showCommentInput)}
-            className="flex items-center gap-1 p-1 rounded hover:bg-gray-50 transition"
-          >
-            <MessageCircle className="w-4 h-4 text-gray-400" />
-            <span className="text-xs text-gray-600">{post.comments.length}</span>
-          </button>
-        </div>
+        {/* Comment */}
+        <button
+          onClick={() => setShowCommentInput(!showCommentInput)}
+          className="flex items-center gap-1 p-1 rounded hover:bg-gray-50 transition"
+        >
+          <MessageCircle className="w-4 h-4 text-gray-400" />
+          <span className="text-xs text-gray-600">{post.comments.length}</span>
+        </button>
       </div>
 
-      {/* Comments Section */}
+      {/* Comments */}
       {showCommentInput && (
         <>
           {post.comments.length > 0 && (
-            <div className="mt-2 space-y-1">
+            <div className="mt-2 space-y-2">
               {post.comments.map((c) => (
-                <div key={c.id} className="flex items-start gap-2 border-b border-gray-200 pb-2">
-                  <div className="w-8 h-8 flex-shrink-0 rounded-full overflow-hidden">
+                <div
+                  key={c.id}
+                  className="flex gap-2 border-b border-gray-200 pb-2"
+                >
+                  <div className="w-8 h-8 rounded-full overflow-hidden">
                     {c.profile_picture ? (
-                      <img src={c.profile_picture} alt={c.author} className="w-full h-full object-cover rounded-full" />
+                      <img
+                        src={c.profile_picture}
+                        alt={c.author}
+                        className="w-full h-full object-cover"
+                      />
                     ) : (
                       <div className="w-full h-full rounded-full bg-orange-100 flex items-center justify-center text-orange-600 text-sm font-semibold">
                         {c.author.charAt(0)}
                       </div>
                     )}
                   </div>
+
                   <div className="flex-1">
-                    <p className="font-semibold text-gray-900 text-sm">{c.author}</p>
+                    <p className="font-semibold text-gray-900 text-sm">
+                      {c.author}
+                    </p>
                     <p className="text-gray-800 text-sm">{c.content}</p>
                   </div>
                 </div>
@@ -682,26 +723,34 @@ function PostCard({ post, user, onLike, onDislike, onAddComment }: PostCardProps
             </div>
           )}
 
-          {/* Add Comment Input */}
+          {/* Add Comment */}
           {user && (
-            <div className="mt-2 flex gap-2 items-start">
-              <div className="w-8 h-8 flex-shrink-0 rounded-full overflow-hidden">
+            <div className="mt-3 flex gap-2 items-start">
+              <div className="w-8 h-8 rounded-full overflow-hidden">
                 {user.profile_picture ? (
-                  <img src={user.profile_picture} alt={user.name} className="w-8 h-8 object-cover rounded-full" />
+                  <img
+                    src={user.profile_picture}
+                    alt={user.name}
+                    className="w-full h-full object-cover"
+                  />
                 ) : (
-                  <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 text-sm font-semibold">
+                  <div className="w-full h-full rounded-full bg-orange-100 flex items-center justify-center text-orange-600 text-sm font-semibold">
                     {user.name.charAt(0)}
                   </div>
                 )}
               </div>
+
               <input
                 type="text"
                 placeholder="Write a comment..."
                 value={newComment}
                 onChange={(e) => setNewComment(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleCommentSubmit()}
+                onKeyDown={(e) =>
+                  e.key === "Enter" && handleCommentSubmit()
+                }
                 className="flex-1 border border-gray-300 rounded px-2 py-1 text-sm placeholder-gray-400 text-gray-900 focus:outline-none focus:border-orange-400"
               />
+
               <button
                 onClick={handleCommentSubmit}
                 className="px-3 py-1.5 bg-orange-500 text-white rounded text-sm hover:bg-orange-600"

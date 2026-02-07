@@ -40,7 +40,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <AuthLayout header={{ title: "Settings", subtitle: "Manage your account preferences" }}>
+    <AuthLayout header={{ title: "Settings", subtitle: "Manage your account preferences", user }}>
       {/* Page Content */}
       <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
         <h2 className="text-lg font-semibold text-gray-900">Settings Page</h2>
