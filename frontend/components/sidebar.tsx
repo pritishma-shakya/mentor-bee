@@ -81,7 +81,8 @@ export default function Sidebar() {
 
   const mentorNav: NavItem[] = [
     { icon: Home, label: "Dashboard", path: "/mentor/dashboard" },
-    { icon: Calendar, label: "My Sessions", path: "/mentor/sessions" },
+    { icon: Calendar, label: "Manage Schedule", path: "/mentor/schedule" },
+    { icon: Calendar, label: "Manage Bookings", path: "/mentor/bookings" },
     { icon: MessageCircle, label: "Messages", path: "/messages" },
     { icon: UserCheck, label: "My Students", path: "/mentor/students" },
     { icon: Users, label: "My Community", path: "/community" },
@@ -102,8 +103,8 @@ export default function Sidebar() {
 
   const navItems =
     user.role === "student" ? studentNav :
-    user.role === "mentor" ? mentorNav :
-    user.role === "admin" ? adminNav : [];
+      user.role === "mentor" ? mentorNav :
+        user.role === "admin" ? adminNav : [];
 
   const handleLogout = async () => {
     try {

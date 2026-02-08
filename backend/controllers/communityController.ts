@@ -1,6 +1,7 @@
 import { Response } from "express";
 import { pgPool } from "../config/database";
 import { AuthRequest } from "../middlewares/authMiddleware";
+import cloudinary from "../config/cloudinary";
 
 // ---------------- Posts ----------------
 export const getPosts = async (_req: AuthRequest, res: Response) => {
@@ -53,31 +54,71 @@ export const getPosts = async (_req: AuthRequest, res: Response) => {
 };
 
 export const createPost = async (req: AuthRequest, res: Response) => {
-  const { content, tag, images } = req.body;
+  const { content, tag } = req.body;
+  const files = req.files as Express.Multer.File[];
+
   if (!req.user) return res.status(401).json({ success: false, message: "Unauthorized" });
-  if (!content && (!images || images.length === 0)) return res.status(400).json({ success: false, message: "Post cannot be empty" });
+  if (!content && (!files || files.length === 0)) {
+    console.error("Validation failed: no content and no files");
+    return res.status(400).json({ success: false, message: "Post content or at least one image is required" });
+  }
 
   const client = await pgPool.connect();
   try {
+    await client.query("BEGIN");
+
     const { rows } = await client.query(
       `INSERT INTO posts (author_id, content, tag, trending, likes_count, dislikes_count)
        VALUES ($1, $2, $3, false, 0, 0)
        RETURNING id, content, tag, trending, likes_count AS likes, dislikes_count AS dislikes, created_at AS time`,
-      [req.user.id, content, tag]
+      [req.user.id, content, tag || "General"]
     );
 
     const postId = rows[0].id;
+    const imageUrls: string[] = [];
 
-    // Insert images
-    if (images && images.length > 0) {
-      const insertPromises = images.map((url: string) =>
+    // Upload images to Cloudinary
+    if (files && files.length > 0) {
+      for (const file of files) {
+        const uploadResult = await new Promise<any>((resolve, reject) => {
+          cloudinary.uploader
+            .upload_stream(
+              {
+                folder: "community_posts",
+                resource_type: "image",
+              },
+              (error, result) => {
+                if (error) reject(error);
+                else resolve(result);
+              }
+            )
+            .end(file.buffer);
+        });
+        imageUrls.push(uploadResult.secure_url);
+      }
+
+      // Insert image URLs into database
+      const insertPromises = imageUrls.map((url: string) =>
         client.query(`INSERT INTO post_images (post_id, image_url) VALUES ($1, $2)`, [postId, url])
       );
       await Promise.all(insertPromises);
     }
 
-    res.json({ success: true, data: { ...rows[0], author: req.user.name, profile_picture: req.user.profile_picture, author_role: req.user.role, comments: [], images: images || [] } });
+    await client.query("COMMIT");
+
+    res.json({
+      success: true,
+      data: {
+        ...rows[0],
+        author: req.user.name,
+        profile_picture: req.user.profile_picture,
+        author_role: req.user.role,
+        comments: [],
+        images: imageUrls,
+      },
+    });
   } catch (err) {
+    await client.query("ROLLBACK");
     console.error("createPost error:", err);
     res.status(500).json({ success: false, message: "Internal server error" });
   } finally {

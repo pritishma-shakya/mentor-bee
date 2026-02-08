@@ -71,6 +71,7 @@ export default function CommunityPage() {
   const [newPostImages, setNewPostImages] = useState<File[]>([]);
   const [newPostImagePreviews, setNewPostImagePreviews] = useState<string[]>([]);
   const [newPostTag, setNewPostTag] = useState("");
+  const [isPublishing, setIsPublishing] = useState(false);
 
   // ---------------- Fetch Data ----------------
   useEffect(() => {
@@ -133,7 +134,7 @@ export default function CommunityPage() {
     if (!files) return;
 
     const fileArray = Array.from(files); // File[]
-    
+
     // Only add File objects to newPostImages
     setNewPostImages([...newPostImages, ...fileArray]);
 
@@ -143,36 +144,54 @@ export default function CommunityPage() {
   };
 
   const handleRemoveImage = (index: number) => {
+    URL.revokeObjectURL(newPostImagePreviews[index]);
     setNewPostImages(newPostImages.filter((_, i) => i !== index));
+    setNewPostImagePreviews(newPostImagePreviews.filter((_, i) => i !== index));
   };
 
   const handleCreatePost = async () => {
     if (!newPostContent.trim() && newPostImages.length === 0)
       return toast.error("Post cannot be empty");
 
+    setIsPublishing(true);
     try {
+      const formData = new FormData();
+      formData.append("content", newPostContent);
+      formData.append("tag", newPostTag.trim() || "General");
+
+      newPostImages.forEach((file) => {
+        formData.append("images", file);
+      });
+
       const res = await fetch("http://localhost:5000/api/community/posts", {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          content: newPostContent,
-          tag: newPostTag.trim() || "General",
-          images: newPostImages,
-        }),
+        body: formData,
       });
-      if (!res.ok) throw new Error("Failed to create post");
+
+      if (!res.ok) {
+        const errData = await res.json();
+        console.error("Backend error:", errData);
+        throw new Error(errData.message || "Failed to create post");
+      }
       const data = await res.json();
       setPosts([data.data, ...posts]);
+
+      // Cleanup
       setNewPostContent("");
+      newPostImagePreviews.forEach(url => URL.revokeObjectURL(url));
       setNewPostImages([]);
+      setNewPostImagePreviews([]);
       setNewPostTag("");
       setShowCreate(false);
+
       toast.success("Post created successfully!");
       if (user) setUser({ ...user, points: (user.points || 0) + 10 });
     } catch (err) {
       console.error(err);
       toast.error("Failed to create post");
+    } finally {
+      setIsPublishing(false);
     }
   };
 
@@ -342,10 +361,10 @@ export default function CommunityPage() {
                 <div className={`mt-2 grid gap-2 ${newPostImagePreviews.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
                   {newPostImagePreviews.map((img, i) => (
                     <div key={i} className="relative rounded-lg overflow-hidden">
-                      <img 
-                        src={img} 
-                        alt={`upload-${i}`} 
-                        className={`object-cover ${newPostImagePreviews.length === 1 ? 'h-56 w-full' : 'h-44 w-full'}`} 
+                      <img
+                        src={img}
+                        alt={`upload-${i}`}
+                        className={`object-cover ${newPostImagePreviews.length === 1 ? 'h-72 w-full' : 'h-44 w-full'}`}
                       />
                       <button
                         onClick={() => handleRemoveImage(i)}
@@ -432,10 +451,17 @@ export default function CommunityPage() {
                 </button>
                 <button
                   onClick={handleCreatePost}
-                  className="px-3 py-1.5 bg-orange-500 text-white rounded text-sm font-medium hover:bg-orange-600 disabled:opacity-50"
-                  disabled={!newPostContent.trim() && newPostImages.length === 0}
+                  className="px-3 py-1.5 bg-orange-500 text-white rounded text-sm font-medium hover:bg-orange-600 disabled:opacity-50 flex items-center gap-2"
+                  disabled={(!newPostContent.trim() && newPostImages.length === 0) || isPublishing}
                 >
-                  Publish Post
+                  {isPublishing ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      Publishing...
+                    </>
+                  ) : (
+                    "Publish Post"
+                  )}
                 </button>
               </div>
             </div>
@@ -504,11 +530,10 @@ export default function CommunityPage() {
             <div className="flex flex-wrap gap-2 mb-3">
               <button
                 onClick={() => setSelectedTag("")}
-                className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
-                  selectedTag === ""
-                    ? "bg-orange-600 text-white"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                }`}
+                className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${selectedTag === ""
+                  ? "bg-orange-600 text-white"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
               >
                 All
               </button>
@@ -516,11 +541,10 @@ export default function CommunityPage() {
                 <button
                   key={tag}
                   onClick={() => setSelectedTag(tag)}
-                  className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
-                    selectedTag === tag
-                      ? "bg-orange-600 text-white"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                  }`}
+                  className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${selectedTag === tag
+                    ? "bg-orange-600 text-white"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
                 >
                   {tag}
                 </button>
@@ -587,7 +611,7 @@ function PostCard({ post, user, onLike, onDislike, onAddComment }: PostCardProps
       <div className="flex items-start gap-3">
         {/* Profile */}
         <div className="relative w-12 h-12 flex-shrink-0">
-          {post.profile_picture ? (
+          {(post.profile_picture && post.profile_picture !== "{}" && typeof post.profile_picture === "string") ? (
             <img
               src={post.profile_picture}
               alt={post.author}
@@ -629,18 +653,17 @@ function PostCard({ post, user, onLike, onDislike, onAddComment }: PostCardProps
       <p className="text-gray-900 leading-relaxed text-sm">{post.content}</p>
 
       {/* Post Images */}
-      {(post.images || []).length > 0 && (
+      {(post.images || []).filter(img => img && img !== "{}").length > 0 && (
         <div
-          className={`mt-2 grid gap-2 ${
-            post.images?.length === 1 ? "grid-cols-1" : "grid-cols-2"
-          }`}
+          className={`mt-2 grid gap-2 ${post.images?.filter(img => img && img !== "{}").length === 1 ? "grid-cols-1" : "grid-cols-2"
+            }`}
         >
-          {post.images?.map((img: string, i: number) => (
+          {post.images?.filter(img => img && img !== "{}").map((img: string, i: number) => (
             <img
               key={i}
               src={img}
               alt={`post-${post.id}-${i}`}
-              className="rounded-lg object-cover h-44 w-full"
+              className={`rounded-lg object-cover w-full ${post.images?.filter(img => img && img !== "{}").length === 1 ? "h-[500px]" : "h-44"}`}
             />
           ))}
         </div>
@@ -652,11 +675,10 @@ function PostCard({ post, user, onLike, onDislike, onAddComment }: PostCardProps
         <div className="flex items-center gap-1.5">
           <button
             onClick={handleLike}
-            className={`p-1 rounded-full transition-colors ${
-              isLiked
-                ? "text-green-600 bg-green-50"
-                : "text-gray-500 hover:text-green-600 hover:bg-green-50"
-            }`}
+            className={`p-1 rounded-full transition-colors ${isLiked
+              ? "text-green-600 bg-green-50"
+              : "text-gray-500 hover:text-green-600 hover:bg-green-50"
+              }`}
           >
             <ThumbsUp className="w-4 h-4" />
           </button>
@@ -667,11 +689,10 @@ function PostCard({ post, user, onLike, onDislike, onAddComment }: PostCardProps
         <div className="flex items-center gap-1.5">
           <button
             onClick={handleDislike}
-            className={`p-1 rounded-full transition-colors ${
-              isDisliked
-                ? "text-red-600 bg-red-50"
-                : "text-gray-500 hover:text-red-600 hover:bg-red-50"
-            }`}
+            className={`p-1 rounded-full transition-colors ${isDisliked
+              ? "text-red-600 bg-red-50"
+              : "text-gray-500 hover:text-red-600 hover:bg-red-50"
+              }`}
           >
             <ThumbsDown className="w-4 h-4" />
           </button>

@@ -42,6 +42,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [learningGoals, setLearningGoals] = useState<LearningGoal[]>([]);
   const [summary, setSummary] = useState<SummaryData>({ sessions: 0, hours: 0, points: 0 });
+  const [realSessions, setRealSessions] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -64,6 +65,11 @@ export default function HomePage() {
             }))
           );
         }
+
+        // Fetch real sessions
+        const sessionsRes = await fetch("http://localhost:5000/api/sessions/student", { credentials: "include" });
+        const sessionsData = await sessionsRes.json();
+        if (Array.isArray(sessionsData)) setRealSessions(sessionsData);
 
         // Fetch learning goals
         const goalsRes = await fetch("http://localhost:5000/api/students/learning-goals", { credentials: "include" });
@@ -91,15 +97,22 @@ export default function HomePage() {
     fetchAll();
   }, []);
 
-  const sessions = [
-    { mentor: "Alice Smith", date: "Sun, Nov 9", time: "1:00 PM – 2:00 PM" },
-    { mentor: "Robert King", date: "Tue, Nov 11", time: "4:00 PM – 5:00 PM" },
-  ];
+  const sessionsThisWeek = realSessions.filter((s) => {
+    const sessionDate = new Date(s.date);
+    const today = new Date();
+    const endOfWeek = new Date();
+    endOfWeek.setDate(today.getDate() + 7);
+    today.setHours(0, 0, 0, 0);
+    return s.status === "Accepted" && sessionDate >= today && sessionDate <= endOfWeek;
+  });
 
   if (loading)
     return (
       <div className="min-h-screen flex items-center justify-center">
-        Loading...
+        <div className="flex flex-col items-center gap-2">
+          <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-gray-500 font-medium">Loading your dashboard...</p>
+        </div>
       </div>
     );
 
@@ -115,7 +128,19 @@ export default function HomePage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mt-5">
         {/* Left/Main Column */}
         <div className="lg:col-span-2 space-y-5">
-          {sessions.map((s, i) => <SessionCard key={i} session={s} />)}
+          <section>
+            <h3 className="text-base font-semibold text-gray-900 mb-3">Your sessions this week</h3>
+            <div className="space-y-4">
+              {sessionsThisWeek.length === 0 ? (
+                <div className="text-center py-10 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                  <p className="text-gray-500 text-sm">No sessions scheduled for this week.</p>
+                </div>
+              ) : (
+                sessionsThisWeek.map((s) => <SessionCard key={s.id} session={s} />)
+              )}
+            </div>
+          </section>
+
           <RecommendedMentors mentors={mentors} loading={loading} />
         </div>
 

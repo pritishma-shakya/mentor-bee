@@ -12,6 +12,8 @@ import studentRoutes from "./routes/studentRoutes";
 import adminRoutes from "./routes/adminRoutes";
 import communityRoutes from "./routes/communityRoutes";
 import messageRoutes from "./routes/messageRoutes";
+import scheduleRoutes from "./routes/scheduleRoutes";
+import sessionRoutes from "./routes/sessionRoutes";
 
 // Socket
 import { initSocket } from "./socket";
@@ -39,6 +41,8 @@ app.use("/api/students", studentRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/community", communityRoutes);
 app.use("/api/conversations", messageRoutes);
+app.use("/api/schedules", scheduleRoutes);
+app.use("/api/sessions", sessionRoutes);
 
 app.get("/", (_req, res) => {
   res.send("Mentor Booking System Backend is running!");

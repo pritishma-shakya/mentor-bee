@@ -162,13 +162,13 @@ export const getSessions = async (req: AuthRequest, res: Response) => {
   const client = await pgPool.connect();
   try {
     const { rows } = await client.query(
-      `SELECT s.id, s.date, s.start_time, s.end_time, s.status,
+      `SELECT s.id, s.date, s.time, s.status,
               u.name AS mentor_name
        FROM sessions s
        JOIN mentors m ON s.mentor_id = m.id
        JOIN users u ON m.user_id = u.id
        WHERE s.student_id = $1
-       ORDER BY s.date DESC, s.start_time DESC`,
+       ORDER BY s.date DESC, s.time DESC`,
       [req.user!.id]
     );
 

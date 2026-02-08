@@ -270,13 +270,11 @@ export default function MentorProfilePage({ params }: { params: Promise<{ id: st
                 Book a 1-on-1 session with {mentor.full_name}
               </p>
               
-              {/* Book Session Button */}
-              <Link href={`/book-session`}>
+              <Link href={`/book-session/${mentor.id}`}>
                 <button className="w-full bg-orange-500 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-orange-600 transition">
                   Book a Session
                 </button>
               </Link>
-
               <button
                 onClick={async () => {
                   if (!user) return toast.error("Please log in first");

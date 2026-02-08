@@ -283,17 +283,16 @@ export default function MessagesPage() {
                   <div
                     key={chat.id || chat.mentor_id}
                     onClick={() => setSelectedChat(chat)}
-                    className={`p-3 flex items-center gap-3 cursor-pointer hover:bg-gray-50 transition ${
-                      selectedChat?.mentor_id === chat.mentor_id
-                        ? "bg-orange-50 border-l-4 border-orange-500"
-                        : ""
-                    }`}
+                    className={`p-3 flex items-center gap-3 cursor-pointer hover:bg-gray-50 transition ${selectedChat?.mentor_id === chat.mentor_id
+                      ? "bg-orange-50 border-l-4 border-orange-500"
+                      : ""
+                      }`}
                   >
-                    <div className="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center overflow-hidden shrink-0">
+                    <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center overflow-hidden shrink-0">
                       {chat.mentor_picture ? (
                         <img src={chat.mentor_picture} alt="" className="w-full h-full object-cover" />
                       ) : (
-                        <span className="text-indigo-600 font-bold text-lg">
+                        <span className="text-orange-600 font-bold text-lg">
                           {chat.mentor_name?.[0]?.toUpperCase() ?? "?"}
                         </span>
                       )}
@@ -319,11 +318,11 @@ export default function MessagesPage() {
             <>
               {/* Chat header */}
               <div className="flex items-center gap-3 p-4 border-b border-gray-100 bg-white">
-                <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center overflow-hidden">
+                <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center overflow-hidden">
                   {selectedChat.mentor_picture ? (
                     <img src={selectedChat.mentor_picture} alt="" className="w-full h-full object-cover" />
                   ) : (
-                    <span className="text-indigo-600 font-bold text-lg">
+                    <span className="text-orange-600 font-bold text-lg">
                       {selectedChat.mentor_name?.[0]?.toUpperCase() ?? "?"}
                     </span>
                   )}
@@ -340,11 +339,10 @@ export default function MessagesPage() {
                   selectedChat.messages.map((msg) => (
                     <div key={msg.id} className={`flex ${msg.sender === "me" ? "justify-end" : "justify-start"}`}>
                       <div
-                        className={`max-w-[70%] px-4 py-2.5 rounded-2xl text-sm ${
-                          msg.sender === "me"
-                            ? "bg-orange-500 text-white rounded-br-none"
-                            : "bg-white text-gray-900 rounded-bl-none border border-gray-200"
-                        }`}
+                        className={`max-w-[70%] px-4 py-2.5 rounded-2xl text-sm ${msg.sender === "me"
+                          ? "bg-orange-500 text-white rounded-br-none"
+                          : "bg-white text-gray-900 rounded-bl-none border border-gray-200"
+                          }`}
                       >
                         {msg.content}
                         <p className="text-[10px] mt-1 text-right opacity-70">
@@ -373,11 +371,10 @@ export default function MessagesPage() {
                 <button
                   onClick={sendMessageHandler}
                   disabled={!messageInput.trim()}
-                  className={`p-3 rounded-full transition ${
-                    messageInput.trim()
-                      ? "bg-orange-500 text-white hover:bg-orange-600"
-                      : "bg-gray-200 text-gray-400 cursor-not-allowed"
-                  }`}
+                  className={`p-3 rounded-full transition ${messageInput.trim()
+                    ? "bg-orange-500 text-white hover:bg-orange-600"
+                    : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                    }`}
                 >
                   <Send className="w-5 h-5" />
                 </button>

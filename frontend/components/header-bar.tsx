@@ -14,9 +14,9 @@ export interface HeaderBarProps {
   user: UserProps | null;
   title: string;
   subtitle?: string;
-    showSearch?: boolean;
-    searchQuery?: string;
-    setSearchQuery?: (query: string) => void;
+  showSearch?: boolean;
+  searchQuery?: string;
+  setSearchQuery?: (query: string) => void;
 }
 
 export default function HeaderBar({ user, title, subtitle, showSearch, searchQuery, setSearchQuery }: HeaderBarProps) {
@@ -51,7 +51,7 @@ export default function HeaderBar({ user, title, subtitle, showSearch, searchQue
         </button>
 
         <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center overflow-hidden">
-          {user?.profile_picture ? (
+          {(user?.profile_picture && user.profile_picture !== "{}" && typeof user.profile_picture === "string") ? (
             <img
               src={user.profile_picture}
               alt="Profile"
