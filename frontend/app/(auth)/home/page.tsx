@@ -136,7 +136,7 @@ export default function HomePage() {
                   <p className="text-gray-500 text-sm">No sessions scheduled for this week.</p>
                 </div>
               ) : (
-                sessionsThisWeek.map((s) => <SessionCard key={s.id} session={s} />)
+                sessionsThisWeek.map((s) => <SessionCard key={s.id} session={s} user={user} />)
               )}
             </div>
           </section>

@@ -184,7 +184,10 @@ export default function ExplorePage() {
                   <div className="flex items-center gap-1">🔥 {course.level}</div>
                 </div>
                 <p className="text-xs text-gray-500 mt-2">Updated {course.updated}</p>
-                <button className="mt-4 w-full py-2 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-xl transition">
+                <button 
+                  onClick={() => toast.success("Enrolling coming soon!")}
+                  className="mt-4 w-full py-2 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-xl transition"
+                >
                   Enroll Now
                 </button>
               </div>
@@ -206,7 +209,10 @@ export default function ExplorePage() {
                 <div className="flex items-center gap-2 text-gray-700 text-sm">⏰ {session.time}</div>
                 <div className="flex justify-between items-center mt-4">
                   <span className="text-lg font-bold text-purple-600">${session.price}</span>
-                  <button className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-xl transition">
+                  <button 
+                    onClick={() => toast.success("Live sessions joining coming soon!")}
+                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-xl transition"
+                  >
                     Join Session
                   </button>
                 </div>

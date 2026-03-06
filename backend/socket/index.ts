@@ -1,50 +1,64 @@
 import { Server, Socket } from "socket.io";
 import jwt from "jsonwebtoken";
-import { sendMessage , getConversationMessages } from "../controllers/messageController";
+import { sendMessage, getConversationMessages, markMessagesAsRead } from "../controllers/messageController";
 
 const JWT_SECRET = process.env.SECRET_KEY!;
+
+const parseCookies = (str: string) => {
+  if (!str) return {};
+  return str.split(";").reduce((res, c) => {
+    const [key, val] = c.trim().split("=");
+    if (key && val) res[key] = val;
+    return res;
+  }, {} as any);
+};
 
 export const initSocket = (io: Server) => {
   // Middleware to authenticate socket connection
   io.use((socket: Socket, next) => {
-    const token = socket.handshake.auth.token;
-    if (!token) return next(new Error("Unauthorized"));
+    const rawCookies = socket.request.headers.cookie || "";
+    const cookies = parseCookies(rawCookies);
+    const token =
+      cookies.student_auth_token ||
+      cookies.mentor_auth_token ||
+      cookies.admin_auth_token ||
+      socket.handshake.auth?.token;
+
+    if (!token) {
+      return next(new Error("Authentication error: Token missing"));
+    }
 
     try {
       const decoded = jwt.verify(token, JWT_SECRET) as any;
-      socket.data.user = { id: decoded.id, role: decoded.role };
+      socket.data.user = decoded;
       next();
-    } catch (err) {
-      next(new Error("Invalid token"));
+    } catch (err: any) {
+      next(new Error("Authentication error: Invalid token"));
     }
   });
 
   io.on("connection", (socket: Socket) => {
-    console.log("User connected:", socket.data.user.id);
+    const userId = socket.data.user.id;
+    socket.join(`user_${userId}`);
 
     socket.on("join_conversation", async (conversationId: string) => {
       socket.join(conversationId);
-      console.log(`User ${socket.data.user.id} joined ${conversationId}`);
 
-      // Optionally send existing messages
       const messages = await getConversationMessages(conversationId, socket.data.user.id);
       socket.emit("load_messages", messages);
     });
 
-    socket.on("send_message", async (data: any) => {
-      const { conversationId, content } = data;
-      const senderId = socket.data.user.id;
-
+    socket.on("mark_read", async (conversationId: string) => {
       try {
-        const message = await sendMessage(conversationId, senderId, content);
-        io.to(conversationId).emit("receive_message", message);
+        await markMessagesAsRead(conversationId, socket.data.user.id);
+        // Optionally notify other participants that messages were read
+        // io.to(conversationId).emit("messages_read", { conversationId, userId: socket.data.user.id });
       } catch (err) {
         console.error(err);
       }
     });
 
     socket.on("disconnect", () => {
-      console.log("User disconnected:", socket.data.user.id);
     });
   });
 };

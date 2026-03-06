@@ -4,7 +4,9 @@ import {
   getMentorSessions,
   getStudentSessions,
   updateSessionStatus,
-  cancelSession,
+  requestCancellation,
+  requestReschedule,
+  respondToRequest,
 } from "../controllers/sessionController";
 import { authenticate } from "../middlewares/authMiddleware";
 
@@ -22,7 +24,13 @@ router.get("/student", authenticate, getStudentSessions);
 // Update session status
 router.patch("/:sessionId/status", authenticate, updateSessionStatus);
 
-// Cancel/delete session
-router.delete("/:sessionId", authenticate, cancelSession);
+// Reschedule request
+router.post("/:sessionId/reschedule", authenticate, requestReschedule);
+
+// Respond to reschedule/cancel request
+router.post("/:sessionId/respond", authenticate, respondToRequest);
+
+// Cancel request (used to be delete)
+router.delete("/:sessionId", authenticate, requestCancellation);
 
 export default router;

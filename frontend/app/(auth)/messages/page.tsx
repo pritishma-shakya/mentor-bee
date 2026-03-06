@@ -2,9 +2,10 @@
 import { useEffect, useState, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { Send, Search } from "lucide-react";
-import toast from "react-hot-toast";
+import { toast } from "react-hot-toast";
 import AuthLayout from "../layout";
-import { io, Socket } from "socket.io-client";
+import { Socket } from "socket.io-client";
+import { useSocket } from "@/context/SocketContext";
 
 interface Message {
   id: string;
@@ -13,6 +14,7 @@ interface Message {
   sender: "me" | "other";
   created_at: string;
   conversation_id?: string;
+  is_read?: boolean;
 }
 
 interface Conversation {
@@ -23,6 +25,7 @@ interface Conversation {
   messages: Message[];
   last_message?: string;
   last_time?: string;
+  unread_count?: number;
 }
 
 interface UserProps {
@@ -42,53 +45,113 @@ export default function MessagesPage() {
   const [selectedChat, setSelectedChat] = useState<Conversation | null>(null);
   const [messageInput, setMessageInput] = useState("");
   const [loading, setLoading] = useState(true);
-  const [socket, setSocket] = useState<Socket | null>(null);
+  const { socket } = useSocket();
 
   const chatContainerRef = useRef<HTMLDivElement | null>(null);
+  const selectedChatIdRef = useRef<string | null>(null);
 
-  // Initialize socket
+  // Sync ref with state
   useEffect(() => {
-    if (!user) return;
-    const newSocket = io("http://localhost:5000", {
-      auth: { token: getCookie("token") }, // assuming token is stored in cookie
-    });
+    selectedChatIdRef.current = selectedChat?.id || null;
+  }, [selectedChat?.id]);
 
-    newSocket.on("connect", () => {
-      console.log("Socket connected:", newSocket.id);
-    });
+  // Replace local effect with context sync
+  const [localSocket, setLocalSocket] = useState<Socket | null>(null);
+  
+  useEffect(() => {
+    if (socket) {
+      setLocalSocket(socket);
+      
+      const receiveHandler = (msg: Message) => {
+        const activeId = selectedChatIdRef.current;
+        const isForActiveChat = activeId === msg.conversation_id;
 
-    newSocket.on("receive_message", (msg: Message) => {
-      if (!selectedChat) return;
+        // Update selected chat if active
+        if (isForActiveChat) {
+          setSelectedChat((prev) => {
+            if (prev && prev.id === msg.conversation_id) {
+              const alreadyExists = prev.messages.some(m => m.id === msg.id);
+              if (alreadyExists) return { ...prev, unread_count: 0 };
+              return { ...prev, messages: [...(prev.messages || []), { ...msg, sender: msg.sender_id === user?.id ? "me" : "other" }], unread_count: 0 };
+            }
+            return prev;
+          });
+        }
 
-      if (msg.conversation_id === selectedChat.id) {
-        // Append message
-        setSelectedChat((prev) =>
-          prev
-            ? { ...prev, messages: [...prev.messages, { ...msg, sender: msg.sender_id === user.id ? "me" : "other" }] }
-            : null
-        );
+        // Update sidebar
+        setConversations((prev) => {
+          const exists = prev.some((c) => c.id === msg.conversation_id);
+          if (!exists) {
+            refreshConversations();
+            return prev;
+          }
+          return prev.map((c) => {
+            if (c.id === msg.conversation_id) {
+              return {
+                ...c,
+                last_message: msg.content,
+                last_time: msg.created_at,
+                unread_count: isForActiveChat || msg.sender_id === user?.id ? 0 : (c.unread_count || 0) + 1
+              };
+            }
+            return c;
+          });
+        });
+
+        if (isForActiveChat && msg.sender_id !== user?.id) {
+          socket.emit("mark_read", msg.conversation_id);
+        }
+      };
+
+      socket.on("receive_message", receiveHandler);
+      return () => {
+        socket.off("receive_message", receiveHandler);
+      };
+    }
+  }, [socket, user?.id]);
+
+  // Join rooms when conversations are loaded
+  useEffect(() => {
+    if (socket && conversations.length > 0) {
+      conversations.forEach((c) => {
+        if (c.id) socket.emit("join_conversation", c.id);
+      });
+    }
+  }, [socket, conversations.length]);
+
+  const refreshConversations = async () => {
+    try {
+      const convRes = await fetch("http://localhost:5000/api/conversations", {
+        credentials: "include",
+      });
+      const convData = await convRes.json();
+      let convs: Conversation[] = convData.data || [];
+
+      if (mentorIdParam) {
+        let conv = convs.find((c) => c.mentor_id === mentorIdParam);
+        if (!conv) {
+          conv = {
+            id: "",
+            mentor_id: mentorIdParam,
+            mentor_name: "Mentor",
+            mentor_picture: "",
+            messages: [],
+          };
+          convs = [conv, ...convs];
+        }
+        setSelectedChat(conv);
       }
 
-      // Update conversations preview
-      setConversations((prev) =>
-        prev.map((c) =>
-          c.id === msg.conversation_id
-            ? { ...c, last_message: msg.content, last_time: msg.created_at }
-            : c
-        )
-      );
-    });
+      setConversations(convs);
+    } catch (err: any) {
+      console.error(err);
+      toast.error("Failed to load conversations");
+    }
+  };
 
-    setSocket(newSocket);
-
-    return () => {
-      newSocket.disconnect();
-    };
-  }, [user, selectedChat]);
-
-  // Fetch user & conversations
+  // Fetch user & initial conversations
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchUser = async () => {
       try {
         const userRes = await fetch("http://localhost:5000/api/auth/profile", {
           credentials: "include",
@@ -96,29 +159,7 @@ export default function MessagesPage() {
         if (!userRes.ok) throw new Error("Unauthorized");
         const userData = await userRes.json();
         setUser(userData.user);
-
-        const convRes = await fetch("http://localhost:5000/api/conversations", {
-          credentials: "include",
-        });
-        const convData = await convRes.json();
-        let convs: Conversation[] = convData.data || [];
-
-        if (mentorIdParam) {
-          let conv = convs.find((c) => c.mentor_id === mentorIdParam);
-          if (!conv) {
-            conv = {
-              id: "",
-              mentor_id: mentorIdParam,
-              mentor_name: "Mentor",
-              mentor_picture: "",
-              messages: [],
-            };
-            convs = [conv, ...convs];
-          }
-          setSelectedChat(conv);
-        }
-
-        setConversations(convs);
+        await refreshConversations();
       } catch (err: any) {
         console.error(err);
         toast.error("Failed to load messages");
@@ -127,10 +168,10 @@ export default function MessagesPage() {
       }
     };
 
-    fetchData();
+    fetchUser();
   }, [mentorIdParam]);
 
-  // Load messages when conversation is selected
+  // Load messages & mark as read
   useEffect(() => {
     if (!selectedChat?.id || !user) return;
 
@@ -149,7 +190,18 @@ export default function MessagesPage() {
             sender: m.sender_id === user.id ? "me" : "other",
             created_at: m.created_at,
           }));
-          setSelectedChat((prev) => (prev ? { ...prev, messages: msgs } : null));
+          setSelectedChat((prev) => (prev ? { ...prev, messages: msgs, unread_count: 0 } : null));
+          
+          // Mark as read via API for reliability
+          fetch(`http://localhost:5000/api/conversations/${selectedChat.id}/read`, {
+            method: "PATCH",
+            credentials: "include",
+          }).catch(console.error);
+
+          // Also keep socket for real-time synchronization if needed
+          socket?.emit("mark_read", selectedChat.id);
+          
+          setConversations(prev => prev.map(c => c.id === selectedChat.id ? { ...c, unread_count: 0 } : c));
         }
       } catch (err) {
         console.error(err);
@@ -157,7 +209,7 @@ export default function MessagesPage() {
     };
 
     fetchMessages();
-  }, [selectedChat?.id, user?.id]);
+  }, [selectedChat?.id, user?.id, socket]);
 
   // Smart auto-scroll
   useEffect(() => {
@@ -206,27 +258,31 @@ export default function MessagesPage() {
         created_at: data.data.created_at,
       };
 
-      // Emit through socket
-      socket.emit("send_message", {
-        conversationId: data.data.conversation_id,
-        content: data.data.content,
-      });
-
-      // Update local state
+      // update local state instantly for better UX
       if (isNew) {
         const newConv: Conversation = {
           ...selectedChat,
           id: data.data.conversation_id,
           messages: [newMsg],
+          unread_count: 0
         };
-        setConversations((prev) => [newConv, ...prev]);
         setSelectedChat(newConv);
+        setConversations((prev) => [newConv, ...prev.filter(c => c.mentor_id !== selectedChat.mentor_id)]);
+        
+        // Join the new room
+        socket.emit("join_conversation", data.data.conversation_id);
       } else {
-        const updatedMsgs = [...(selectedChat.messages || []), newMsg];
-        setSelectedChat((prev) => (prev ? { ...prev, messages: updatedMsgs } : null));
+        setSelectedChat((prev) => {
+            if (!prev || prev.id !== selectedChat.id) return prev;
+            if (prev.messages.some(m => m.id === newMsg.id)) return prev;
+            return { ...prev, messages: [...(prev.messages || []), newMsg], unread_count: 0 };
+        });
         setConversations((prev) =>
-          prev.map((c) => (c.id === selectedChat.id ? { ...c, messages: updatedMsgs } : c))
+          prev.map((c) => (c.id === selectedChat.id ? { ...c, last_message: newMsg.content, last_time: newMsg.created_at, unread_count: 0 } : c))
         );
+        
+        // Also ensure server knows it's read
+        socket?.emit("mark_read", selectedChat.id);
       }
 
       setMessageInput("");
@@ -282,7 +338,13 @@ export default function MessagesPage() {
                 return (
                   <div
                     key={chat.id || chat.mentor_id}
-                    onClick={() => setSelectedChat(chat)}
+                    onClick={() => {
+                      setSelectedChat({ ...chat, unread_count: 0 });
+                      if (chat.id) {
+                        setConversations(prev => prev.map(c => c.id === chat.id ? { ...c, unread_count: 0 } : c));
+                        socket?.emit("mark_read", chat.id);
+                      }
+                    }}
                     className={`p-3 flex items-center gap-3 cursor-pointer hover:bg-gray-50 transition ${selectedChat?.mentor_id === chat.mentor_id
                       ? "bg-orange-50 border-l-4 border-orange-500"
                       : ""
@@ -303,7 +365,16 @@ export default function MessagesPage() {
                         <p className="font-medium truncate text-gray-900">{chat.mentor_name || "Unknown"}</p>
                         {timeDisplay && <span className="text-xs text-gray-500 whitespace-nowrap">{timeDisplay}</span>}
                       </div>
-                      <p className="text-sm truncate text-gray-800 mt-0.5">{preview}</p>
+                      <div className="flex justify-between items-center mt-0.5">
+                        <p className={`text-sm truncate flex-1 ${chat.unread_count ? "text-gray-900 font-semibold" : "text-gray-500"}`}>
+                          {preview}
+                        </p>
+                        {chat.unread_count ? (
+                          <span className="ml-2 px-1.5 py-0.5 bg-orange-500 text-white text-[10px] font-bold rounded-full min-w-[18px] text-center">
+                            {chat.unread_count}
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
                 );

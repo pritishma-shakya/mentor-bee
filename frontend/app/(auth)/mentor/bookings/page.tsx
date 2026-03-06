@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import toast from "react-hot-toast";
+import { toast } from "react-hot-toast";
 
 import AuthLayout from "../../layout";
 import MentorSessionCard from "@/components/mentor-session-card";
@@ -19,7 +19,7 @@ interface Session {
     student_id: string;
     date: string;
     time: string;
-    status: "Completed" | "Cancelled" | "Pending" | "Accepted" | "Rejected" | "Started";
+    status: "Completed" | "Cancelled" | "Pending" | "Accepted" | "Rejected" | "Started" | "Cancel Requested" | "Reschedule Requested";
     student_name: string;
     profile_picture?: string;
     course: string;
@@ -27,13 +27,17 @@ interface Session {
     type: "Online" | "In-Person";
     location: string | null;
     meeting_link?: string;
+    cancel_requested_by?: string;
+    reschedule_requested_by?: string;
+    rescheduled_date?: string;
+    rescheduled_time?: string;
 }
 
 export default function ManageBookingsPage() {
     const [user, setUser] = useState<User | null>(null);
     const [sessions, setSessions] = useState<Session[]>([]);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<"All Bookings" | "Pending" | "Upcoming" | "History">("All Bookings");
+    const [activeTab, setActiveTab] = useState<"Pending" | "Upcoming" | "History">("Upcoming");
 
 
     useEffect(() => {
@@ -70,27 +74,41 @@ export default function ManageBookingsPage() {
         fetchData();
     }, []);
 
-    const updateStatus = async (sessionId: string, status: string) => {
+    const handleRespondToRequest = async (id: string, type: "reschedule" | "cancel", action: "accept" | "reject") => {
         try {
-            const res = await fetch(`http://localhost:5000/api/sessions/${sessionId}/status`, {
-                method: "PATCH",
+            const res = await fetch(`http://localhost:5000/api/sessions/${id}/respond`, {
+                method: "POST",
                 headers: { "Content-Type": "application/json" },
                 credentials: "include",
-                body: JSON.stringify({ status }),
+                body: JSON.stringify({ type, action }),
             });
-
-            if (!res.ok) throw new Error("Failed to update status");
-
-            toast.success(`Session ${status.toLowerCase()}`);
-
-            // Re-fetch sessions only.
+            if (!res.ok) throw new Error("Failed to respond to request");
+            toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} ${action}ed`);
+            
             const sessionsRes = await fetch("http://localhost:5000/api/sessions/mentor", { credentials: "include" });
             const data = await sessionsRes.json();
             if (Array.isArray(data)) setSessions(data);
+        } catch (err) {
+            console.error(err);
+            toast.error("Action failed");
+        }
+    };
 
-        } catch (error) {
-            console.error(error);
-            toast.error("Update failed");
+    const handleCancelSession = async (id: string) => {
+        try {
+            const res = await fetch(`http://localhost:5000/api/sessions/${id}`, {
+                method: "DELETE",
+                credentials: "include",
+            });
+            if (!res.ok) throw new Error("Failed to request cancellation");
+            toast.success("Cancellation requested");
+            
+            const sessionsRes = await fetch("http://localhost:5000/api/sessions/mentor", { credentials: "include" });
+            const data = await sessionsRes.json();
+            if (Array.isArray(data)) setSessions(data);
+        } catch (err) {
+            console.error(err);
+            toast.error("Cancel request failed");
         }
     };
 
@@ -100,13 +118,45 @@ export default function ManageBookingsPage() {
 
     // Filter Logic
     const refinedFilteredSessions = sessions.filter(session => {
-        if (activeTab === "All Bookings") return true;
-        if (activeTab === "Pending") return session.status === "Pending";
-        if (activeTab === "Upcoming") return ['Accepted', 'Started'].includes(session.status);
+        if (activeTab === "Pending") {
+            return (
+                session.status === "Pending" ||
+                (session.status === "Cancel Requested" && session.cancel_requested_by !== user?.id) ||
+                (session.status === "Reschedule Requested" && session.reschedule_requested_by !== user?.id)
+            );
+        }
+        if (activeTab === "Upcoming") {
+            return (
+                ['Accepted', 'Started'].includes(session.status) ||
+                (session.status === "Cancel Requested" && session.cancel_requested_by === user?.id) ||
+                (session.status === "Reschedule Requested" && session.reschedule_requested_by === user?.id)
+            );
+        }
         if (activeTab === "History") return ['Completed', 'Rejected', 'Cancelled'].includes(session.status);
         return false;
     });
 
+    const pendingCount = sessions.filter(s => s.status === "Pending").length;
+
+    const handleRescheduleSession = async (id: string, date: string, time: string) => {
+        try {
+            const res = await fetch(`http://localhost:5000/api/sessions/${id}/reschedule`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({ newDate: date, newTime: time }),
+            });
+            if (!res.ok) throw new Error("Failed to request reschedule");
+            toast.success("Reschedule requested");
+            
+            const sessionsRes = await fetch("http://localhost:5000/api/sessions/mentor", { credentials: "include" });
+            const data = await sessionsRes.json();
+            if (Array.isArray(data)) setSessions(data);
+        } catch (err) {
+            console.error(err);
+            toast.error("Reschedule request failed");
+        }
+    };
 
     return (
         <AuthLayout
@@ -119,16 +169,21 @@ export default function ManageBookingsPage() {
             <div>
                 {/* Tabs */}
                 <div className="flex gap-8 border-b border-gray-200 mb-6 overflow-x-auto">
-                    {["All Bookings", "Pending", "Upcoming", "History"].map((tab) => (
+                    {["Upcoming", "Pending", "History"].map((tab) => (
                         <button
                             key={tab}
                             onClick={() => setActiveTab(tab as any)}
-                            className={`pb-3 text-sm font-medium relative transition-colors whitespace-nowrap ${activeTab === tab
+                            className={`pb-3 text-sm font-medium relative transition-colors whitespace-nowrap flex items-center ${activeTab === tab
                                 ? "text-orange-600 font-semibold"
                                 : "text-gray-500 hover:text-gray-800"
                                 }`}
                         >
                             {tab}
+                            {tab === "Pending" && pendingCount > 0 && (
+                                <span className="ml-2 px-1.5 py-0.5 text-[10px] bg-red-500 text-white rounded-full min-w-[18px] text-center">
+                                    {pendingCount}
+                                </span>
+                            )}
                             {activeTab === tab && (
                                 <span className="absolute bottom-0 left-0 w-full h-0.5 bg-orange-600 rounded-full" />
                             )}
@@ -147,10 +202,115 @@ export default function ManageBookingsPage() {
                             <MentorSessionCard
                                 key={session.id}
                                 session={session as any}
-                                onAccept={(id) => updateStatus(id, "Accepted")}
-                                onReject={(id) => updateStatus(id, "Rejected")}
-                                onStart={(id) => updateStatus(id, "Started")}
-                                onComplete={(id) => updateStatus(id, "Completed")}
+                                user={user}
+                                onAccept={(id) => {
+                                    // Special case for accepting initial booking
+                                    const updateStatus = async (sessionId: string, status: string) => {
+                                        try {
+                                            const res = await fetch(`http://localhost:5000/api/sessions/${sessionId}/status`, {
+                                                method: "PATCH",
+                                                headers: { "Content-Type": "application/json" },
+                                                credentials: "include",
+                                                body: JSON.stringify({ status }),
+                                            });
+                                
+                                            if (!res.ok) throw new Error("Failed to update status");
+                                
+                                            toast.success(`Session ${status.toLowerCase()}`);
+                                
+                                            // Re-fetch sessions only.
+                                            const sessionsRes = await fetch("http://localhost:5000/api/sessions/mentor", { credentials: "include" });
+                                            const data = await sessionsRes.json();
+                                            if (Array.isArray(data)) setSessions(data);
+                                
+                                        } catch (error) {
+                                            console.error(error);
+                                            toast.error("Update failed");
+                                        }
+                                    };
+                                    updateStatus(id, "Accepted");
+                                }}
+                                onReject={(id) => {
+                                    const updateStatus = async (sessionId: string, status: string) => {
+                                        try {
+                                            const res = await fetch(`http://localhost:5000/api/sessions/${sessionId}/status`, {
+                                                method: "PATCH",
+                                                headers: { "Content-Type": "application/json" },
+                                                credentials: "include",
+                                                body: JSON.stringify({ status }),
+                                            });
+                                
+                                            if (!res.ok) throw new Error("Failed to update status");
+                                
+                                            toast.success(`Session ${status.toLowerCase()}`);
+                                
+                                            // Re-fetch sessions only.
+                                            const sessionsRes = await fetch("http://localhost:5000/api/sessions/mentor", { credentials: "include" });
+                                            const data = await sessionsRes.json();
+                                            if (Array.isArray(data)) setSessions(data);
+                                
+                                        } catch (error) {
+                                            console.error(error);
+                                            toast.error("Update failed");
+                                        }
+                                    };
+                                    updateStatus(id, "Rejected");
+                                }}
+                                onCancel={handleCancelSession}
+                                onStart={(id) => {
+                                    const updateStatus = async (sessionId: string, status: string) => {
+                                        try {
+                                            const res = await fetch(`http://localhost:5000/api/sessions/${sessionId}/status`, {
+                                                method: "PATCH",
+                                                headers: { "Content-Type": "application/json" },
+                                                credentials: "include",
+                                                body: JSON.stringify({ status }),
+                                            });
+                                
+                                            if (!res.ok) throw new Error("Failed to update status");
+                                
+                                            toast.success(`Session ${status.toLowerCase()}`);
+                                
+                                            // Re-fetch sessions only.
+                                            const sessionsRes = await fetch("http://localhost:5000/api/sessions/mentor", { credentials: "include" });
+                                            const data = await sessionsRes.json();
+                                            if (Array.isArray(data)) setSessions(data);
+                                
+                                        } catch (error) {
+                                            console.error(error);
+                                            toast.error("Update failed");
+                                        }
+                                    };
+                                    updateStatus(id, "Started");
+                                }}
+                                onComplete={(id) => {
+                                    const updateStatus = async (sessionId: string, status: string) => {
+                                        try {
+                                            const res = await fetch(`http://localhost:5000/api/sessions/${sessionId}/status`, {
+                                                method: "PATCH",
+                                                headers: { "Content-Type": "application/json" },
+                                                credentials: "include",
+                                                body: JSON.stringify({ status }),
+                                            });
+                                
+                                            if (!res.ok) throw new Error("Failed to update status");
+                                
+                                            toast.success(`Session ${status.toLowerCase()}`);
+                                
+                                            // Re-fetch sessions only.
+                                            const sessionsRes = await fetch("http://localhost:5000/api/sessions/mentor", { credentials: "include" });
+                                            const data = await sessionsRes.json();
+                                            if (Array.isArray(data)) setSessions(data);
+                                
+                                        } catch (error) {
+                                            console.error(error);
+                                            toast.error("Update failed");
+                                        }
+                                    };
+                                    updateStatus(id, "Completed");
+                                }}
+                                onRespond={handleRespondToRequest}
+                                onReschedule={handleRescheduleSession}
                             />
                         ))}
                     </div>

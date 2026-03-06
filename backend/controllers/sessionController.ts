@@ -1,6 +1,14 @@
-import { Request, Response } from "express";
+import { Response } from "express";
 import { pgPool } from "../config/database";
 import { AuthRequest } from "../middlewares/authMiddleware";
+import { createNotification } from "../utils/notificationService";
+
+// Helper to format date cleanly (YYYY-MM-DD)
+const formatDate = (date: any) => {
+  if (!date) return "";
+  const d = new Date(date);
+  return d.toISOString().split('T')[0];
+};
 
 // Create a new session (student books a session)
 export const bookSession = async (req: AuthRequest, res: Response) => {
@@ -21,6 +29,20 @@ export const bookSession = async (req: AuthRequest, res: Response) => {
     );
 
     res.status(201).json({ message: "Session booked", session: rows[0] });
+
+    // Send Notification to Mentor
+    const io = req.app.get("io");
+    const mentorUserId = await getMentorUserId(mentor_id);
+    const cleanTime = rows[0].time.split(':').slice(0, 2).join(':'); // HH:MM
+    const cleanDate = formatDate(date);
+    await createNotification({
+      userId: mentorUserId,
+      type: "booking",
+      title: "New Booking Request",
+      message: `${req.user?.name || "A student"} has booked a mentorship session with you for ${cleanDate} at ${cleanTime}. Please review and respond to the booking request.`,
+      data: { sessionId: rows[0].id },
+      io,
+    });
   } catch (err: any) {
     console.error(err);
     if (err.code === "23505") {
@@ -96,29 +118,232 @@ export const updateSessionStatus = async (req: AuthRequest, res: Response) => {
 
     if (!rows.length) return res.status(404).json({ message: "Session not found" });
 
-    res.json({ message: "Status updated", session: rows[0] });
+    const session = rows[0];
+    res.json({ message: "Status updated", session });
+
+    // Send Notification to Student/Mentor
+    const io = req.app.get("io");
+    const isMentor = req.user?.role === "mentor";
+    const targetUserId = isMentor ? session.student_id : (await getMentorUserId(session.mentor_id));
+
+    const cleanTime = session.time.split(':').slice(0, 2).join(':'); // HH:MM
+    const cleanDate = formatDate(session.date);
+    if (status === "Accepted") {
+      await createNotification({
+        userId: session.student_id,
+        type: "booking",
+        title: "Booking Accepted",
+        message: `${req.user?.name || "The mentor"} has accepted your session on ${cleanDate} at ${cleanTime}.`,
+        data: { sessionId: session.id },
+        io,
+      });
+    } else if (status === "Rejected") {
+      await createNotification({
+        userId: session.student_id,
+        type: "cancellation",
+        title: "Booking Rejected",
+        message: `${req.user?.name || "The mentor"} has rejected your booking request for ${cleanDate} at ${cleanTime}.`,
+        data: { sessionId: session.id },
+        io,
+      });
+    } else if (status === "Cancelled") {
+      await createNotification({
+        userId: targetUserId,
+        type: "cancellation",
+        title: "Session Cancelled",
+        message: `${req.user?.name || "The other participant"} has cancelled the session on ${cleanDate} at ${cleanTime}.`,
+        data: { sessionId: session.id },
+        io,
+      });
+    }
   } catch (err) {
     console.error("Error updating session status:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-// Cancel a session (student or mentor)
-export const cancelSession = async (req: AuthRequest, res: Response) => {
+// Request Cancellation (student or mentor)
+export const requestCancellation = async (req: AuthRequest, res: Response) => {
   const userId = req.user?.id;
   const { sessionId } = req.params;
   if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
   try {
     const { rows } = await pgPool.query(
-      `DELETE FROM sessions WHERE id=$1 RETURNING *`,
-      [sessionId]
+      `UPDATE sessions 
+       SET status = 'Cancel Requested', 
+           cancel_requested_by = $1, 
+           cancel_requested_at = NOW() 
+       WHERE id = $2 RETURNING *`,
+      [userId, sessionId]
     );
     if (!rows.length) return res.status(404).json({ message: "Session not found" });
 
-    res.json({ message: "Session cancelled", session: rows[0] });
+    const session = rows[0];
+    res.json({ message: "Cancellation requested", session });
+
+    // Send Notification
+    const io = req.app.get("io");
+    const isMentor = req.user?.role === "mentor";
+    const targetUserId = isMentor ? session.student_id : (await getMentorUserId(session.mentor_id));
+
+    await createNotification({
+      userId: targetUserId,
+      type: "cancellation",
+      title: "Cancellation Request",
+      message: `${req.user?.name || "The other participant"} has requested to cancel the session on ${formatDate(session.date)}.`,
+      data: { sessionId: session.id },
+      io,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 };
+
+// Request Reschedule
+export const requestReschedule = async (req: AuthRequest, res: Response) => {
+  const userId = req.user?.id;
+  const { sessionId } = req.params;
+  const { newDate, newTime } = req.body;
+  if (!userId) return res.status(401).json({ message: "Unauthorized" });
+  if (!newDate || !newTime) return res.status(400).json({ message: "New date and time required" });
+
+  try {
+    const cleanTime = newTime.split(':').slice(0, 2).join(':'); // HH:MM
+    const { rows } = await pgPool.query(
+      `UPDATE sessions 
+       SET status = 'Reschedule Requested', 
+           rescheduled_date = $1, 
+           rescheduled_time = $2, 
+           reschedule_requested_by = $3, 
+           reschedule_requested_at = NOW() 
+       WHERE id = $4 RETURNING *`,
+      [newDate, cleanTime, userId, sessionId]
+    );
+    if (!rows.length) return res.status(404).json({ message: "Session not found" });
+
+    const session = rows[0];
+    res.json({ message: "Reschedule requested", session });
+
+    // Send Notification
+    const io = req.app.get("io");
+    const isMentor = req.user?.role === "mentor";
+    const targetUserId = isMentor ? session.student_id : (await getMentorUserId(session.mentor_id));
+
+    const cleanDate = formatDate(newDate);
+    await createNotification({
+      userId: targetUserId,
+      type: "booking",
+      title: "Reschedule Request",
+      message: `${req.user?.name || "The other participant"} has requested to reschedule the session to ${cleanDate} at ${cleanTime}.`,
+      data: { sessionId: session.id },
+      io,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// Respond to Reschedule/Cancellation
+export const respondToRequest = async (req: AuthRequest, res: Response) => {
+  const userId = req.user?.id;
+  const { sessionId } = req.params;
+  const { type, action } = req.body; // type: 'reschedule'|'cancel', action: 'accept'|'reject'
+  if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+  try {
+    const { rows: sessionRows } = await pgPool.query(`SELECT * FROM sessions WHERE id = $1`, [sessionId]);
+    if (!sessionRows.length) return res.status(404).json({ message: "Session not found" });
+    const session = sessionRows[0];
+
+    const io = req.app.get("io");
+
+    if (type === 'reschedule') {
+      if (action === 'accept') {
+        const { rows } = await pgPool.query(
+          `UPDATE sessions 
+           SET date = rescheduled_date, 
+               time = rescheduled_time, 
+               status = 'Accepted', 
+               rescheduled_date = NULL, 
+               rescheduled_time = NULL, 
+               reschedule_requested_by = NULL, 
+               reschedule_requested_at = NULL 
+           WHERE id = $1 RETURNING *`,
+          [sessionId]
+        );
+        res.json({ message: "Reschedule accepted", session: rows[0] });
+        await createNotification({
+          userId: session.reschedule_requested_by,
+          type: "booking",
+          title: "Reschedule Accepted",
+          message: `${req.user?.name} has accepted the reschedule request.`,
+          data: { sessionId },
+          io,
+        });
+      } else {
+        const { rows } = await pgPool.query(
+          `UPDATE sessions 
+           SET status = 'Accepted', 
+               rescheduled_date = NULL, 
+               rescheduled_time = NULL, 
+               reschedule_requested_by = NULL, 
+               reschedule_requested_at = NULL 
+           WHERE id = $1 RETURNING *`,
+          [sessionId]
+        );
+        res.json({ message: "Reschedule rejected", session: rows[0] });
+        await createNotification({
+          userId: session.reschedule_requested_by,
+          type: "cancellation",
+          title: "Reschedule Rejected",
+          message: `${req.user?.name} has rejected the reschedule request.`,
+          data: { sessionId },
+          io,
+        });
+      }
+    } else if (type === 'cancel') {
+        if (action === 'accept') {
+            await pgPool.query(`DELETE FROM sessions WHERE id = $1`, [sessionId]);
+            res.json({ message: "Cancellation accepted and session removed" });
+            await createNotification({
+                userId: session.cancel_requested_by,
+                type: "cancellation",
+                title: "Cancellation Accepted",
+                message: `${req.user?.name} has accepted the cancellation request.`,
+                data: { sessionId },
+                io,
+            });
+        } else {
+            const { rows } = await pgPool.query(
+                `UPDATE sessions 
+                 SET status = 'Accepted', 
+                     cancel_requested_by = NULL, 
+                     cancel_requested_at = NULL 
+                 WHERE id = $1 RETURNING *`,
+                [sessionId]
+            );
+            res.json({ message: "Cancellation rejected", session: rows[0] });
+            await createNotification({
+                userId: session.cancel_requested_by,
+                type: "cancellation",
+                title: "Cancellation Rejected",
+                message: `${req.user?.name} has rejected the cancellation request.`,
+                data: { sessionId },
+                io,
+            });
+        }
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// Helper to get mentor's user_id from mentor_id
+async function getMentorUserId(mentorId: string) {
+    const { rows } = await pgPool.query(`SELECT user_id FROM mentors WHERE id = $1`, [mentorId]);
+    return rows[0]?.user_id;
+}

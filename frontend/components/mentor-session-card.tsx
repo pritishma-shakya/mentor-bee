@@ -20,7 +20,7 @@ interface Session {
     student_id: string;
     date: string;
     time: string;
-    status: "Completed" | "Cancelled" | "Pending" | "Accepted" | "Rejected" | "Started";
+    status: "Completed" | "Cancelled" | "Pending" | "Accepted" | "Rejected" | "Started" | "Cancel Requested" | "Reschedule Requested";
     student_name: string;
     profile_picture?: string;
     course: string;
@@ -28,24 +28,48 @@ interface Session {
     type: "Online" | "In-Person";
     location: string | null;
     meeting_link?: string;
+    cancel_requested_by?: string;
+    reschedule_requested_by?: string;
+    rescheduled_date?: string;
+    rescheduled_time?: string;
 }
 
 interface MentorSessionCardProps {
     session: Session;
+    user: any;
     onAccept: (id: string) => void;
     onReject: (id: string) => void;
+    onCancel?: (id: string) => void;
     onComplete: (id: string) => void;
     onStart?: (id: string) => void;
+    onRespond?: (id: string, type: "reschedule" | "cancel", action: "accept" | "reject") => void;
+    onReschedule?: (id: string, date: string, time: string) => void;
 }
+
+const formatDate = (date: string | undefined) => {
+  if (!date) return "";
+  try {
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return date; // Return original if invalid
+    return d.toISOString().split('T')[0];
+  } catch (e) {
+    return date;
+  }
+};
 
 export default function MentorSessionCard({
     session,
+    user,
     onAccept,
     onReject,
+    onCancel,
     onComplete,
-    onStart
+    onStart,
+    onRespond,
 }: MentorSessionCardProps) {
     const [expanded, setExpanded] = useState(false);
+    const [showConfirm, setShowConfirm] = useState(false);
+    const [confirmType, setConfirmType] = useState<"reject" | "cancel" | null>(null);
 
     // Helper to get correct image URL
     const getProfileImage = (path: string) => {
@@ -56,10 +80,37 @@ export default function MentorSessionCard({
         return `http://localhost:5000${path}`;
     };
 
+    const handleConfirm = () => {
+        if (confirmType === "reject") {
+            onReject(session.id);
+        } else if (confirmType === "cancel" && onCancel) {
+            onCancel(session.id);
+        }
+        setShowConfirm(false);
+        setConfirmType(null);
+    };
+
+    const isRequester = (status: string) => {
+        if (status === 'Cancel Requested') return session.cancel_requested_by === user?.id;
+        if (status === 'Reschedule Requested') return session.reschedule_requested_by === user?.id;
+        return false;
+    };
+
+    const statusColors: any = {
+        Accepted: "bg-blue-50 text-blue-700 border-blue-200",
+        Started: "bg-purple-50 text-purple-700 border-purple-200",
+        Completed: "bg-green-50 text-green-700 border-green-200",
+        Cancelled: "bg-red-50 text-red-700 border-red-200",
+        Rejected: "bg-red-50 text-red-700 border-red-200",
+        Pending: "bg-yellow-50 text-yellow-700 border-yellow-200",
+        "Cancel Requested": "bg-orange-50 text-orange-700 border-orange-200",
+        "Reschedule Requested": "bg-orange-50 text-orange-700 border-orange-200",
+    };
+
     const renderActions = (isExpanded: boolean) => {
         return (
             <div className={`flex flex-wrap gap-2 ${isExpanded ? 'pt-2' : 'mt-4'}`}>
-                {/* PENDING STATE */}
+                {/* PENDING STATE for Initial Booking */}
                 {session.status === "Pending" && (
                     <>
                         <button
@@ -71,7 +122,10 @@ export default function MentorSessionCard({
                         </button>
 
                         <button
-                            onClick={() => onReject(session.id)}
+                            onClick={() => {
+                                setConfirmType("reject");
+                                setShowConfirm(true);
+                            }}
                             className={`px-6 ${isExpanded ? 'py-2' : 'py-1.5'} bg-white border border-red-200 text-red-600 font-medium rounded-lg ${isExpanded ? 'text-sm' : 'text-xs'} flex items-center justify-center gap-2 hover:bg-red-50 transition shadow-sm`}
                         >
                             <XCircle className={`${isExpanded ? 'w-4 h-4' : 'w-3.5 h-3.5'}`} />
@@ -80,7 +134,7 @@ export default function MentorSessionCard({
                     </>
                 )}
 
-                {(session.status === "Accepted" || session.status === "Started") && (
+                {(["Accepted", "Started", "Reschedule Requested"].includes(session.status)) && (
                     <>
                         {(session.status === "Accepted" || session.status === "Started") && onStart && (
                             <button
@@ -100,10 +154,24 @@ export default function MentorSessionCard({
                             Message
                         </Link>
 
+                        {/* RESCHEDULE button */}
+                        {["Accepted", "Pending"].includes(session.status) && (
+                            <Link 
+                                href={`/mentor/schedule?rescheduleSessionId=${session.id}&studentName=${session.student_name}`}
+                                className={`px-6 ${isExpanded ? 'py-2' : 'py-1.5'} border border-orange-200 text-orange-600 hover:bg-orange-50 rounded-lg font-medium ${isExpanded ? 'text-sm' : 'text-xs'} flex items-center justify-center gap-2 transition shadow-sm bg-white overflow-hidden`}
+                            >
+                                <Calendar className={`${isExpanded ? 'w-4 h-4' : 'w-3.5 h-3.5'}`} />
+                                Reschedule
+                            </Link>
+                        )}
+
                         {/* CANCEL button for mentor */}
-                        {(["Accepted"].includes(session.status)) && (
+                        {onCancel && session.status !== "Cancel Requested" && (
                             <button
-                                onClick={() => onReject(session.id)}
+                                onClick={() => {
+                                    setConfirmType("cancel");
+                                    setShowConfirm(true);
+                                }}
                                 className={`px-4 ${isExpanded ? 'py-2' : 'py-1.5'} text-red-600 hover:bg-red-50 rounded-lg font-medium ${isExpanded ? 'text-sm' : 'text-xs'} transition flex items-center gap-2`}
                             >
                                 <XCircle className={`${isExpanded ? 'w-4 h-4' : 'w-3.5 h-3.5'}`} />
@@ -127,7 +195,7 @@ export default function MentorSessionCard({
     };
 
     return (
-        <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 hover:shadow-md transition">
+        <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 hover:shadow-md transition relative">
             <div className="flex items-start justify-between">
                 <div className="flex items-start gap-3">
                     {/* Avatar */}
@@ -148,13 +216,7 @@ export default function MentorSessionCard({
                     <div>
                         <div className="flex items-center gap-2">
                             <h3 className="text-sm font-semibold text-gray-900">{session.student_name}</h3>
-                            <div className={`px-2 py-0.5 rounded-full text-xs font-medium border
-                                ${session.status === 'Accepted' ? 'bg-blue-50 text-blue-700 border-blue-200' : ''}
-                                ${session.status === 'Started' ? 'bg-purple-50 text-purple-700 border-purple-200' : ''}
-                                ${session.status === 'Completed' ? 'bg-green-50 text-green-700 border-green-200' : ''}
-                                ${session.status === 'Cancelled' || session.status === 'Rejected' ? 'bg-red-50 text-red-700 border-red-200' : ''}
-                                ${session.status === 'Pending' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : ''}
-                            `}>
+                            <div className={`px-2 py-0.5 rounded-full text-xs font-medium border ${statusColors[session.status] || ""}`}>
                                 {session.status}
                             </div>
                         </div>
@@ -190,6 +252,39 @@ export default function MentorSessionCard({
                 </div>
             )}
 
+            {session.status === "Cancel Requested" && (
+                <div className={`mt-3 p-3 rounded-lg text-xs flex items-center justify-between ${isRequester(session.status) ? "bg-orange-50 text-orange-700" : "bg-red-50 text-red-700"}`}>
+                    <div className="flex items-center gap-2">
+                        <XCircle className="w-4 h-4" />
+                        <span>{isRequester(session.status) ? "Cancellation pending student's approval." : `${session.student_name} requested to cancel this session.`}</span>
+                    </div>
+                    {!isRequester(session.status) && onRespond && (
+                        <div className="flex gap-2">
+                            <button onClick={() => onRespond(session.id, "cancel", "accept")} className="px-3 py-1 bg-red-600 text-white rounded font-bold hover:bg-red-700 transition">Accept</button>
+                            <button onClick={() => onRespond(session.id, "cancel", "reject")} className="px-3 py-1 bg-white border border-gray-300 text-gray-700 rounded font-bold hover:bg-gray-50 transition">Reject</button>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {session.status === "Reschedule Requested" && (
+                <div className={`mt-3 p-3 rounded-lg text-xs flex flex-col gap-2 ${isRequester(session.status) ? "bg-orange-50 text-orange-700" : "bg-blue-50 text-blue-700"}`}>
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 font-medium">
+                            <Calendar className="w-4 h-4" />
+                            <span>{isRequester(session.status) ? "Reschedule pending approval." : `${session.student_name} requested to reschedule.`}</span>
+                        </div>
+                        {!isRequester(session.status) && onRespond && (
+                            <div className="flex gap-2">
+                                <button onClick={() => onRespond(session.id, "reschedule", "accept")} className="px-3 py-1 bg-orange-600 text-white rounded font-bold hover:bg-orange-700 transition shadow-sm">Accept</button>
+                                <button onClick={() => onRespond(session.id, "reschedule", "reject")} className="px-3 py-1 bg-white border border-gray-300 text-gray-700 rounded font-bold hover:bg-gray-50 transition shadow-sm">Reject</button>
+                            </div>
+                        )}
+                    </div>
+                    <p className="text-[11px] opacity-90 px-6">Proposed: <span className="font-bold">{formatDate(session.rescheduled_date)}</span> at <span className="font-bold">{session.rescheduled_time}</span></p>
+                </div>
+            )}
+
             {/* EXPANDED VIEW */}
             {expanded && (
                 <div className="mt-4 border-t pt-4 text-sm text-gray-700 space-y-3">
@@ -218,6 +313,41 @@ export default function MentorSessionCard({
             )}
 
             {!expanded && renderActions(false)}
+
+            {/* Confirmation Modal */}
+            {showConfirm && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+                    <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200">
+                        <div className="p-6">
+                            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                                {confirmType === "reject" ? "Reject Request" : "Cancel Session"}
+                            </h3>
+                            <p className="text-sm text-gray-600">
+                                {confirmType === "reject"
+                                    ? "Are you sure you want to reject this booking request? This action cannot be undone."
+                                    : "Are you sure you want to request cancellation? This requires student's approval."}
+                            </p>
+                        </div>
+                        <div className="bg-gray-50 px-6 py-4 flex justify-end gap-3">
+                            <button
+                                onClick={() => {
+                                    setShowConfirm(false);
+                                    setConfirmType(null);
+                                }}
+                                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 rounded-lg transition"
+                            >
+                                No, Keep it
+                            </button>
+                            <button
+                                onClick={handleConfirm}
+                                className="px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg transition shadow-sm"
+                            >
+                                {confirmType === "reject" ? "Yes, Reject" : "Yes, Request"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

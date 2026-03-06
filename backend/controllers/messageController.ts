@@ -1,4 +1,6 @@
+import { Server } from "socket.io";
 import { pgPool } from "../config/database";
+import { createNotification } from "../utils/notificationService";
 
 export interface Conversation {
   id: string;
@@ -8,6 +10,7 @@ export interface Conversation {
   messages: Message[];
   last_message?: string;
   last_time?: string;
+  unread_count?: number;
 }
 
 export interface Message {
@@ -16,6 +19,8 @@ export interface Message {
   sender_id: string;
   content: string;
   created_at: string;
+  is_read?: boolean;
+  participants?: string[];
 }
 
 // Get all conversations for a user
@@ -27,7 +32,12 @@ export const getConversations = async (userId: string): Promise<Conversation[]> 
            u.name AS mentor_name,
            u.profile_picture AS mentor_picture,
            m.content AS last_message,
-           m.created_at AS last_time
+           m.created_at AS last_time,
+           (
+             SELECT COUNT(*)::int
+             FROM messages
+             WHERE conversation_id = c.id AND sender_id != $1 AND is_read = FALSE
+           ) AS unread_count
     FROM conversations c
     JOIN conversation_participants cp ON cp.conversation_id = c.id
     JOIN users u ON u.id = (
@@ -57,6 +67,7 @@ export const getConversations = async (userId: string): Promise<Conversation[]> 
     messages: [], // will fetch separately
     last_message: r.last_message,
     last_time: r.last_time,
+    unread_count: r.unread_count,
   }));
 };
 
@@ -73,7 +84,7 @@ export const getConversationMessages = async (
   if (rowCount === 0) throw new Error("Forbidden");
 
   const { rows } = await pgPool.query(
-    `SELECT id, conversation_id, sender_id, content, created_at
+    `SELECT id, conversation_id, sender_id, content, created_at, is_read
      FROM messages
      WHERE conversation_id = $1
      ORDER BY created_at ASC`,
@@ -107,9 +118,49 @@ export const sendMessage = async (
   const { rows } = await pgPool.query(
     `INSERT INTO messages (conversation_id, sender_id, content) 
      VALUES ($1, $2, $3)
-     RETURNING id, conversation_id, sender_id, content, created_at`,
+     RETURNING id, conversation_id, sender_id, content, created_at, is_read`,
     [conversationId, senderId, content]
   );
 
-  return rows[0];
+  // Fetch participants for the conversation to help with broadcasting
+  const { rows: participants } = await pgPool.query(
+    `SELECT user_id FROM conversation_participants WHERE conversation_id = $1`,
+    [conversationId]
+  );
+
+  const message = {
+    ...rows[0],
+    participants: participants.map((p) => p.user_id),
+  };
+
+  // Fetch sender name for notification
+  const { rows: senderRows } = await pgPool.query(`SELECT name FROM users WHERE id = $1`, [senderId]);
+  const senderName = senderRows[0]?.name || "Someone";
+
+  // Send Notifications to other participants (Non-blocking)
+  const otherParticipants = (message.participants || []).filter((p: string) => p !== senderId);
+  const globalIo = (global as any).io;
+  
+  otherParticipants.forEach((recipientId: string) => {
+    createNotification({
+      userId: recipientId,
+      type: "message",
+      title: "New Message",
+      message: `${senderName} sent you a message: "${content.substring(0, 30)}${content.length > 30 ? "..." : ""}"`,
+      data: { conversationId: message.conversation_id },
+      io: globalIo,
+    }).catch(err => console.error("[MessageController] Notification failed:", err));
+  });
+
+  return message;
+};
+
+// Mark messages as read
+export const markMessagesAsRead = async (conversationId: string, userId: string): Promise<void> => {
+  await pgPool.query(
+    `UPDATE messages 
+     SET is_read = TRUE 
+     WHERE conversation_id = $1 AND sender_id != $2 AND is_read = FALSE`,
+    [conversationId, userId]
+  );
 };

@@ -2,6 +2,7 @@ import { Response } from "express";
 import { pgPool } from "../config/database";
 import { AuthRequest } from "../middlewares/authMiddleware";
 import cloudinary from "../config/cloudinary";
+import { createNotification } from "../utils/notificationService";
 
 // ---------------- Posts ----------------
 export const getPosts = async (_req: AuthRequest, res: Response) => {
@@ -142,7 +143,25 @@ export const reactToPost = async (req: AuthRequest, res: Response) => {
     );
 
     if (!rows.length) return res.status(404).json({ success: false, message: "Post not found" });
-    res.json({ success: true, data: rows[0] });
+    
+    const post = rows[0];
+    res.json({ success: true, data: post });
+
+    // Send Notification to Post Author
+    if (type === "like") {
+      const io = req.app.get("io");
+      const { rows: authorRows } = await client.query(`SELECT author_id, content FROM posts WHERE id = $1`, [postId]);
+      if (authorRows.length && authorRows[0].author_id !== req.user.id) {
+        await createNotification({
+          userId: authorRows[0].author_id,
+          type: "interaction",
+          title: "New Like on your post",
+          message: `${req.user.name} liked your post: "${authorRows[0].content.substring(0, 30)}..."`,
+          data: { postId },
+          io,
+        });
+      }
+    }
   } catch (err) {
     console.error("reactToPost error:", err);
     res.status(500).json({ success: false, message: "Internal server error" });
@@ -167,7 +186,22 @@ export const addComment = async (req: AuthRequest, res: Response) => {
       [postId, req.user.id, content]
     );
 
-    res.json({ success: true, data: { ...rows[0], author: req.user.name, profile_picture: req.user.profile_picture } });
+    const comment = rows[0];
+    res.json({ success: true, data: { ...comment, author: req.user.name, profile_picture: req.user.profile_picture } });
+
+    // Send Notification to Post Author
+    const io = req.app.get("io");
+    const { rows: authorRows } = await client.query(`SELECT author_id, content FROM posts WHERE id = $1`, [postId]);
+    if (authorRows.length && authorRows[0].author_id !== req.user.id) {
+      await createNotification({
+        userId: authorRows[0].author_id,
+        type: "interaction",
+        title: "New Comment on your post",
+        message: `${req.user.name} commented: "${content.substring(0, 30)}..."`,
+        data: { postId },
+        io,
+      });
+    }
   } catch (err) {
     console.error("addComment error:", err);
     res.status(500).json({ success: false, message: "Internal server error" });

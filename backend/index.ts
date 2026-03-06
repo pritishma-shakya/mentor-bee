@@ -14,9 +14,11 @@ import communityRoutes from "./routes/communityRoutes";
 import messageRoutes from "./routes/messageRoutes";
 import scheduleRoutes from "./routes/scheduleRoutes";
 import sessionRoutes from "./routes/sessionRoutes";
+import notificationRoutes from "./routes/notificationRoutes";
 
 // Socket
 import { initSocket } from "./socket";
+import { startReminderService } from "./utils/reminderService";
 
 dotenv.config();
 
@@ -43,6 +45,7 @@ app.use("/api/community", communityRoutes);
 app.use("/api/conversations", messageRoutes);
 app.use("/api/schedules", scheduleRoutes);
 app.use("/api/sessions", sessionRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 app.get("/", (_req, res) => {
   res.send("Mentor Booking System Backend is running!");
@@ -59,7 +62,10 @@ const io = new Server(server, {
 });
 
 // Initialize Socket.IO
+app.set("io", io);
+(global as any).io = io;
 initSocket(io);
+startReminderService();
 
 /* ================= START SERVER ================= */
 server.listen(PORT, () => {

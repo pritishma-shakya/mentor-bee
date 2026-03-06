@@ -234,8 +234,10 @@ export default function CommunityPage() {
         )
       );
       if (user) setUser({ ...user, points: (user.points || 0) + 1 });
+      toast.success("Post liked!");
     } catch (err) {
       console.error(err);
+      toast.error("Failed to like post");
     }
   };
 
@@ -257,8 +259,10 @@ export default function CommunityPage() {
           p.id === postId ? { ...p, dislikes: data.data.dislikes } : p
         )
       );
+      toast.success("Reaction updated");
     } catch (err) {
       console.error(err);
+      toast.error("Failed to react to post");
     }
   };
 
@@ -282,8 +286,10 @@ export default function CommunityPage() {
         )
       );
       if (user) setUser({ ...user, points: (user.points || 0) + 5 });
+      toast.success("Comment added!");
     } catch (err) {
       console.error(err);
+      toast.error("Failed to add comment");
     }
   };
 

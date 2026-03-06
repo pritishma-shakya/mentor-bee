@@ -1,7 +1,7 @@
 import express from "express";
 import { authenticate, AuthRequest } from "../middlewares/authMiddleware";
 import { pgPool } from "../config/database";
-import { getConversations, getConversationMessages, sendMessage } from "../controllers/messageController";
+import { getConversations, getConversationMessages, sendMessage, markMessagesAsRead } from "../controllers/messageController";
 
 const router = express.Router();
 
@@ -40,10 +40,29 @@ router.post("/:conversationId?/messages", authenticate, async (req: AuthRequest,
       mentor_id
     );
 
+    // Broadcast message via socket
+    const io = req.app.get("io");
+    if (io) {
+      msg.participants?.forEach((pId: string) => {
+        io.to(`user_${pId}`).emit("receive_message", msg);
+      });
+    }
+
     res.json({ success: true, data: msg });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: "Failed to send message" });
+  }
+});
+
+// Mark messages as read
+router.patch("/:conversationId/read", authenticate, async (req: AuthRequest, res) => {
+  try {
+    await markMessagesAsRead(req.params.conversationId, req.user!.id);
+    res.json({ success: true, message: "Messages marked as read" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Failed to mark messages as read" });
   }
 });
 

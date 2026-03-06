@@ -31,17 +31,21 @@ interface Session {
   meeting_link?: string;
   goal?: string;
   notes?: string;
-  status: "Completed" | "Cancelled" | "Pending" | "Accepted" | "Rejected" | "Started";
+  status: "Completed" | "Cancelled" | "Pending" | "Accepted" | "Rejected" | "Started" | "Cancel Requested" | "Reschedule Requested";
   type: "Online" | "In-Person";
   location: string | null;
   mentor_user_id?: string;
+  cancel_requested_by?: string;
+  reschedule_requested_by?: string;
+  rescheduled_date?: string;
+  rescheduled_time?: string;
 }
 
 export default function SessionsPage() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [activeTab, setActiveTab] = useState<"All Sessions" | "Upcoming" | "Pending" | "History">("All Sessions");
+  const [activeTab, setActiveTab] = useState<"Upcoming" | "Pending" | "History">("Upcoming");
 
 
   useEffect(() => {
@@ -85,26 +89,31 @@ export default function SessionsPage() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    if (activeTab === "All Sessions") return true;
-
-    if (activeTab === "Upcoming") {
-      // Include Accepted sessions for today or future
+    if (activeTab === "Pending") {
       return (
-        ["Accepted", "Started"].includes(session.status) &&
-        sessionDate >= today
+        session.status === "Pending" ||
+        (session.status === "Cancel Requested" && session.cancel_requested_by !== user?.id) ||
+        (session.status === "Reschedule Requested" && session.reschedule_requested_by !== user?.id)
       );
     }
-    if (activeTab === "Pending") {
-      return session.status === "Pending";
+    if (activeTab === "Upcoming") {
+        // Include sessions where user is waiting for approval
+        return (
+          ["Accepted", "Started"].includes(session.status) ||
+          (session.status === "Cancel Requested" && session.cancel_requested_by === user?.id) ||
+          (session.status === "Reschedule Requested" && session.reschedule_requested_by === user?.id)
+        ) && sessionDate >= today;
     }
     if (activeTab === "History") {
       return (
         ["Completed", "Cancelled", "Rejected"].includes(session.status) ||
-        (sessionDate < today && !["Pending", "Accepted", "Started"].includes(session.status))
+        (sessionDate < today && !["Pending", "Accepted", "Started", "Cancel Requested", "Reschedule Requested"].includes(session.status))
       );
     }
     return true;
   });
+
+  const pendingCount = sessions.filter(s => s.status === "Pending").length;
 
   if (loading) {
     return (
@@ -141,28 +150,83 @@ export default function SessionsPage() {
   };
 
   const handleCancelSession = async (id: string) => {
-    await updateStatus(id, "Cancelled");
+    // This will now call the DELETE /:sessionId which triggers requestCancellation
+    try {
+      const res = await fetch(`http://localhost:5000/api/sessions/${id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to request cancellation");
+      toast.success("Cancellation requested");
+      
+      const sessionsRes = await fetch("http://localhost:5000/api/sessions/student", { credentials: "include" });
+      const data = await sessionsRes.json();
+      if (Array.isArray(data)) setSessions(data);
+    } catch (err) {
+      console.error(err);
+      toast.error("Cancel request failed");
+    }
   };
 
-  const handleAcceptReschedule = async (id: string) => {
-    await updateStatus(id, "Accepted");
+  const handleRespondToRequest = async (id: string, type: "reschedule" | "cancel", action: "accept" | "reject") => {
+    try {
+      const res = await fetch(`http://localhost:5000/api/sessions/${id}/respond`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ type, action }),
+      });
+      if (!res.ok) throw new Error("Failed to respond to request");
+      toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} ${action}ed`);
+      
+      const sessionsRes = await fetch("http://localhost:5000/api/sessions/student", { credentials: "include" });
+      const data = await sessionsRes.json();
+      if (Array.isArray(data)) setSessions(data);
+    } catch (err) {
+      console.error(err);
+      toast.error("Action failed");
+    }
   };
 
+  const handleRescheduleSession = async (id: string, date: string, time: string) => {
+    try {
+      const res = await fetch(`http://localhost:5000/api/sessions/${id}/reschedule`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ newDate: date, newTime: time }),
+      });
+      if (!res.ok) throw new Error("Failed to request reschedule");
+      toast.success("Reschedule requested");
+      
+      const sessionsRes = await fetch("http://localhost:5000/api/sessions/student", { credentials: "include" });
+      const data = await sessionsRes.json();
+      if (Array.isArray(data)) setSessions(data);
+    } catch (err) {
+      console.error(err);
+      toast.error("Reschedule request failed");
+    }
+  };
 
   return (
     <AuthLayout header={{ title: "Your Mentorship Sessions", subtitle: "Keep learning and growing today!", user }}>
       {/* Tabs */}
       <div className="flex gap-6 border-b border-gray-200 mb-5">
-        {["All Sessions", "Upcoming", "Pending", "History"].map((tab) => (
+        {["Upcoming", "Pending", "History"].map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab as any)}
-            className={`pb-2 text-sm font-medium relative transition-colors ${activeTab === tab
+            className={`pb-2 text-sm font-medium relative transition-colors flex items-center ${activeTab === tab
               ? "text-orange-600"
               : "text-gray-400 hover:text-gray-600"
               }`}
           >
             {tab}
+            {tab === "Pending" && pendingCount > 0 && (
+              <span className="ml-2 px-1.5 py-0.5 text-[10px] bg-red-500 text-white rounded-full min-w-[18px] text-center">
+                {pendingCount}
+              </span>
+            )}
             {activeTab === tab && (
               <span className="absolute bottom-0 left-0 w-full h-0.5 bg-orange-500 rounded-full" />
             )}
@@ -174,16 +238,17 @@ export default function SessionsPage() {
       <div className="space-y-4">
         {filteredSessions.length === 0 ? (
           <div className="text-center py-16 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
-            <p className="text-gray-400 font-medium">No {activeTab === "All Sessions" ? "" : activeTab.toLowerCase()} sessions found.</p>
+            <p className="text-gray-400 font-medium">No {activeTab.toLowerCase()} sessions found.</p>
           </div>
         ) : (
           filteredSessions.map((session) => (
             <SessionCard
               key={session.id}
               session={session as any}
+              user={user}
               onCancel={handleCancelSession}
-              onAccept={handleAcceptReschedule}
-              onReject={(id) => updateStatus(id, "Rejected")}
+              onRespond={handleRespondToRequest}
+              onReschedule={handleRescheduleSession}
             />
           ))
         )}

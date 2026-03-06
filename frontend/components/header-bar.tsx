@@ -1,6 +1,8 @@
 "use client";
 
-import { Bell, User, Search } from "lucide-react";
+import { User, Search } from "lucide-react";
+import NotificationDropdown from "./notification-dropdown";
+import { useSocket } from "@/context/SocketContext";
 
 interface UserProps {
   id: string;
@@ -20,6 +22,7 @@ export interface HeaderBarProps {
 }
 
 export default function HeaderBar({ user, title, subtitle, showSearch, searchQuery, setSearchQuery }: HeaderBarProps) {
+  const { socket } = useSocket();
   return (
     <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
       <div>
@@ -42,13 +45,7 @@ export default function HeaderBar({ user, title, subtitle, showSearch, searchQue
           </div>
         )}
 
-        <button
-          className="relative p-1.5 hover:bg-gray-200 rounded-full transition"
-          aria-label="Notifications"
-        >
-          <Bell className="w-4 h-4 text-gray-800" />
-          <span className="absolute top-0.5 right-0.5 w-2 h-2 bg-red-500 rounded-full" />
-        </button>
+        <NotificationDropdown socket={socket} user={user} />
 
         <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center overflow-hidden">
           {(user?.profile_picture && user.profile_picture !== "{}" && typeof user.profile_picture === "string") ? (
