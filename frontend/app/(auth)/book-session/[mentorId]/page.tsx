@@ -13,6 +13,9 @@ import {
   Users,
   CheckCircle2,
   MessageSquare,
+  Wallet,
+  CreditCard,
+  Banknote,
 } from "lucide-react";
 
 const SessionMap = dynamic(() => import("../../../../components/session-map"), { ssr: false });
@@ -44,8 +47,9 @@ export default function BookSessionPage() {
   const [schedule, setSchedule] = useState<Schedule[]>([]);
   const [course, setCourse] = useState("");
   const [notes, setNotes] = useState("");
-  const [step, setStep] = useState<1 | 2>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<"eSewa" | "Cash">("eSewa");
 
   const [rescheduleSessionId, setRescheduleSessionId] = useState<string | null>(null);
   const [existingSession, setExistingSession] = useState<any>(null);
@@ -160,7 +164,7 @@ export default function BookSessionPage() {
     const now = new Date();
     // Use Nepal time (UTC+5:45)
     const nepalNow = new Date(now.getTime() + (5 * 60 + 45) * 60000);
-    
+
     const targetDate = new Date(date);
     if (time) {
       // Parse "9:00 AM" or "1:00 PM"
@@ -172,7 +176,7 @@ export default function BookSessionPage() {
     } else {
       targetDate.setHours(23, 59, 59, 999);
     }
-    
+
     return targetDate < nepalNow;
   };
 
@@ -194,10 +198,10 @@ export default function BookSessionPage() {
     if (!mentor || !selectedDate || !selectedTime) return;
     setIsSubmitting(true);
     try {
-      const url = rescheduleSessionId 
+      const url = rescheduleSessionId
         ? `http://localhost:5000/api/sessions/${rescheduleSessionId}/reschedule`
         : "http://localhost:5000/api/sessions";
-      
+
       const payload: any = {
         mentor_id: mentor.id,
         date: selectedDate,
@@ -206,11 +210,71 @@ export default function BookSessionPage() {
         notes,
         type: sessionType,
         location: locationResult?.address || null,
+        payment_status: paymentMethod === "Cash" ? "Cash at Venue" : "Not Paid",
       };
 
       if (rescheduleSessionId) {
         payload.newDate = selectedDate;
         payload.newTime = selectedTime;
+      }
+
+      if (paymentMethod === "eSewa") {
+        const transactionId = rescheduleSessionId || `MB-${Date.now()}`;
+
+        // Save pending booking details to localStorage
+        localStorage.setItem("pending_booking", JSON.stringify(payload));
+
+        toast.loading("Initializing secure payment...");
+
+        // Fetch signature
+        const sigRes = await fetch("http://localhost:5000/api/payment/generate-signature", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            total_amount: mentor.hourly_rate.toString(),
+            transaction_uuid: transactionId,
+            product_code: "EPAYTEST"
+          }),
+        });
+
+        if (!sigRes.ok) {
+          throw new Error("Failed to initialize payment gateway");
+        }
+
+        const sigData = await sigRes.json();
+
+        // Create and submit hidden form
+        const form = document.createElement("form");
+        form.action = "https://rc-epay.esewa.com.np/api/epay/main/v2/form";
+        form.method = "POST";
+        form.style.display = "none";
+
+        const fields = {
+          amount: mentor.hourly_rate.toString(),
+          tax_amount: "0",
+          total_amount: mentor.hourly_rate.toString(),
+          transaction_uuid: transactionId,
+          product_code: "EPAYTEST",
+          product_service_charge: "0",
+          product_delivery_charge: "0",
+          success_url: "http://localhost:3000/payment-success",
+          failure_url: "http://localhost:3000/payment-failed",
+          signed_field_names: "total_amount,transaction_uuid,product_code",
+          signature: sigData.signature
+        };
+
+        for (const [key, value] of Object.entries(fields)) {
+          const input = document.createElement("input");
+          input.type = "hidden";
+          input.name = key;
+          input.value = value;
+          form.appendChild(input);
+        }
+
+        document.body.appendChild(form);
+        form.submit();
+
+        return; // Stop execution here as the page will navigate away
       }
 
       const res = await fetch(url, {
@@ -220,9 +284,10 @@ export default function BookSessionPage() {
         body: JSON.stringify(payload),
       });
 
+      const resData = await res.json();
+
       if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData?.message || (rescheduleSessionId ? "Reschedule failed" : "Booking failed"));
+        throw new Error(resData?.message || (rescheduleSessionId ? "Reschedule failed" : "Booking failed"));
       }
 
       toast.success(rescheduleSessionId ? "Reschedule requested!" : "Session booked successfully!");
@@ -239,9 +304,9 @@ export default function BookSessionPage() {
   if (!mentor) return <p className="text-red-600">Mentor not found</p>;
 
   return (
-    <AuthLayout header={{ 
-      title: rescheduleSessionId ? `Reschedule with ${mentor.full_name}` : `Book with ${mentor.full_name}`, 
-      subtitle: rescheduleSessionId ? "Select a new date & time" : "Choose date & time" 
+    <AuthLayout header={{
+      title: rescheduleSessionId ? `Reschedule with ${mentor.full_name}` : `Book with ${mentor.full_name}`,
+      subtitle: rescheduleSessionId ? "Select a new date & time" : "Choose date & time"
     }}>
       <div className="px-4 py-4">
 
@@ -286,10 +351,10 @@ export default function BookSessionPage() {
           <div className="flex-1 h-0.5 bg-gray-200 max-w-[80px]" />
 
           <div className="flex items-center gap-2">
-            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-medium ${step === 2 ? "bg-orange-600" : "bg-gray-300"}`}>
-              2
+            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-medium ${step === 3 ? "bg-orange-600" : step > 3 ? "bg-green-600" : "bg-gray-300"}`}>
+              {step > 3 ? <CheckCircle2 className="w-4 h-4" /> : "3"}
             </div>
-            <span className="text-sm font-semibold text-gray-900">Confirmation</span>
+            <span className="text-sm font-semibold text-gray-900">Payment</span>
           </div>
         </div>
 
@@ -502,12 +567,96 @@ export default function BookSessionPage() {
                 Back
               </button>
               <button
-                onClick={handleFinalSubmit}
+                onClick={() => setStep(3)}
                 disabled={isSubmitting}
-                className={`flex-1 py-3.5 rounded-lg text-white text-sm font-bold transition shadow-lg ${isSubmitting ? "bg-gray-400 cursor-not-allowed" : "bg-orange-600 hover:bg-orange-700 shadow-orange-100"
+                className="flex-1 py-3.5 bg-orange-600 text-white text-sm font-bold rounded-lg hover:bg-orange-700 transition shadow-lg shadow-orange-100"
+              >
+                Proceed to Payment
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === 3 && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 animate-in fade-in zoom-in-95 duration-300">
+            <div className="text-center mb-8">
+              <div className="w-14 h-14 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Wallet className="w-8 h-8 text-orange-600" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 mb-1">Select Payment Method</h2>
+              <p className="text-sm text-gray-500">How would you like to pay for this session?</p>
+            </div>
+
+            <div className="space-y-4 mb-8">
+              {/* eSewa Option */}
+              <button
+                onClick={() => setPaymentMethod("eSewa")}
+                className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition-all ${paymentMethod === "eSewa"
+                  ? "border-green-500 bg-green-50 shadow-md"
+                  : "border-gray-100 bg-gray-50 hover:border-gray-200"
                   }`}
               >
-                {isSubmitting ? "Processing..." : rescheduleSessionId ? "Confirm Reschedule" : "Confirm Booking"}
+                <div className="flex items-center gap-4">
+                  <div className={`p-2 rounded-lg ${paymentMethod === "eSewa" ? "bg-green-600 text-white" : "bg-white text-gray-400 border border-gray-200"}`}>
+                    <CreditCard className="w-6 h-6" />
+                  </div>
+                  <div className="text-left">
+                    <p className={`font-bold ${paymentMethod === "eSewa" ? "text-green-900" : "text-gray-900"}`}>eSewa (Online)</p>
+                    <p className="text-xs text-gray-500">Fast and secure mobile wallet</p>
+                  </div>
+                </div>
+                {paymentMethod === "eSewa" && <CheckCircle2 className="w-6 h-6 text-green-600" />}
+              </button>
+
+              {/* Cash Option - Only for In-Person */}
+              {sessionType === "In-Person" && (
+                <button
+                  onClick={() => setPaymentMethod("Cash")}
+                  className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition-all ${paymentMethod === "Cash"
+                    ? "border-orange-500 bg-orange-50 shadow-md"
+                    : "border-gray-100 bg-gray-50 hover:border-gray-200"
+                    }`}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className={`p-2 rounded-lg ${paymentMethod === "Cash" ? "bg-orange-600 text-white" : "bg-white text-gray-400 border border-gray-200"}`}>
+                      <Banknote className="w-6 h-6" />
+                    </div>
+                    <div className="text-left">
+                      <p className={`font-bold ${paymentMethod === "Cash" ? "text-orange-900" : "text-gray-900"}`}>Pay with Cash</p>
+                      <p className="text-xs text-gray-500">Pay directly at the venue</p>
+                    </div>
+                  </div>
+                  {paymentMethod === "Cash" && <CheckCircle2 className="w-6 h-6 text-orange-600" />}
+                </button>
+              )}
+            </div>
+
+            <div className="bg-gray-50 rounded-xl p-4 mb-8 flex justify-between items-center border border-gray-100">
+              <div>
+                <p className="text-xs text-gray-500 font-medium">Session Fee</p>
+                <p className="text-lg font-black text-gray-900">Rs. {mentor.hourly_rate}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-gray-500 font-medium">Payment Method</p>
+                <p className="text-sm font-bold text-orange-600">{paymentMethod === "eSewa" ? "eSewa Online" : "Cash at Venue"}</p>
+              </div>
+            </div>
+
+            <div className="flex gap-4">
+              <button
+                onClick={() => setStep(2)}
+                disabled={isSubmitting}
+                className="flex-1 py-4 border border-gray-300 rounded-xl text-gray-700 text-sm font-bold hover:bg-gray-50 transition"
+              >
+                Back
+              </button>
+              <button
+                onClick={handleFinalSubmit}
+                disabled={isSubmitting}
+                className={`flex-1 py-4 rounded-xl text-white text-sm font-bold transition shadow-lg ${isSubmitting ? "bg-gray-400 cursor-not-allowed" : "bg-green-600 hover:bg-green-700 shadow-green-100"
+                  }`}
+              >
+                {isSubmitting ? "Processing..." : `Pay & Book Now`}
               </button>
             </div>
           </div>

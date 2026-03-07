@@ -50,8 +50,48 @@ export default function SessionsPage() {
 
   useEffect(() => {
     const fetchData = async () => {
+      // 1. Handle potential eSewa redirect
+      const searchParams = new URLSearchParams(window.location.search);
+      const status = searchParams.get("status");
+      const data = searchParams.get("data");
+
+      if (status === "success" && data) {
+        try {
+          // eSewa sends a base64 encoded JSON string on success
+          const decodedData = JSON.parse(atob(data as string));
+          if (decodedData.status === "COMPLETE") {
+            const pendingBookingStr = localStorage.getItem("pending_booking");
+            if (pendingBookingStr) {
+              const payload = JSON.parse(pendingBookingStr);
+
+              // Now actually book the session in the database
+              const bookRes = await fetch("http://localhost:5000/api/sessions", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify(payload),
+              });
+
+              if (bookRes.ok) {
+                toast.success("Payment successful! Session booked.");
+                localStorage.removeItem("pending_booking");
+                window.history.replaceState({}, document.title, window.location.pathname);
+              } else {
+                toast.error("Payment verified, but booking failed.");
+              }
+            }
+          }
+        } catch (err) {
+          console.error("Error parsing eSewa data:", err);
+        }
+      } else if (status === "failure") {
+        toast.error("Payment failed or was cancelled.");
+        localStorage.removeItem("pending_booking");
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+
+      // 2. Fetch profile and sessions
       try {
-        // Fetch profile
         const profileRes = await fetch("http://localhost:5000/api/auth/profile", {
           credentials: "include",
         });
@@ -59,13 +99,11 @@ export default function SessionsPage() {
         const profileData = await profileRes.json();
         setUser(profileData?.user || null);
 
-        // Fetch sessions from the enriched endpoint
         const sessionsRes = await fetch("http://localhost:5000/api/sessions/student", {
           credentials: "include",
         });
         const sessionsData = await sessionsRes.json();
 
-        // sessionController.getStudentSessions returns an array directly
         if (Array.isArray(sessionsData)) {
           setSessions(sessionsData);
         } else {
@@ -97,12 +135,12 @@ export default function SessionsPage() {
       );
     }
     if (activeTab === "Upcoming") {
-        // Include sessions where user is waiting for approval
-        return (
-          ["Accepted", "Started"].includes(session.status) ||
-          (session.status === "Cancel Requested" && session.cancel_requested_by === user?.id) ||
-          (session.status === "Reschedule Requested" && session.reschedule_requested_by === user?.id)
-        ) && sessionDate >= today;
+      // Include sessions where user is waiting for approval
+      return (
+        ["Accepted", "Started"].includes(session.status) ||
+        (session.status === "Cancel Requested" && session.cancel_requested_by === user?.id) ||
+        (session.status === "Reschedule Requested" && session.reschedule_requested_by === user?.id)
+      ) && sessionDate >= today;
     }
     if (activeTab === "History") {
       return (
@@ -158,7 +196,7 @@ export default function SessionsPage() {
       });
       if (!res.ok) throw new Error("Failed to request cancellation");
       toast.success("Cancellation requested");
-      
+
       const sessionsRes = await fetch("http://localhost:5000/api/sessions/student", { credentials: "include" });
       const data = await sessionsRes.json();
       if (Array.isArray(data)) setSessions(data);
@@ -178,7 +216,7 @@ export default function SessionsPage() {
       });
       if (!res.ok) throw new Error("Failed to respond to request");
       toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} ${action}ed`);
-      
+
       const sessionsRes = await fetch("http://localhost:5000/api/sessions/student", { credentials: "include" });
       const data = await sessionsRes.json();
       if (Array.isArray(data)) setSessions(data);
@@ -198,7 +236,7 @@ export default function SessionsPage() {
       });
       if (!res.ok) throw new Error("Failed to request reschedule");
       toast.success("Reschedule requested");
-      
+
       const sessionsRes = await fetch("http://localhost:5000/api/sessions/student", { credentials: "include" });
       const data = await sessionsRes.json();
       if (Array.isArray(data)) setSessions(data);

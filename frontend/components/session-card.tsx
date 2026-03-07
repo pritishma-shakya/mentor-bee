@@ -35,6 +35,7 @@ interface Session {
   reschedule_requested_by?: string;
   rescheduled_date?: string;
   rescheduled_time?: string;
+  payment_status?: "Paid" | "Cash at Venue" | "Not Paid" | string;
 }
 
 interface SessionCardProps {
@@ -93,6 +94,12 @@ export default function SessionCard({ session, user, onCancel, onRespond }: Sess
     "Reschedule Requested": "bg-orange-50 text-orange-700 border-orange-200",
   };
 
+  const paymentStatusColors: Record<string, string> = {
+    "Paid": "bg-green-50 text-green-700 border-green-200",
+    "Cash at Venue": "bg-orange-50 text-orange-700 border-orange-200",
+    "Not Paid": "bg-red-50 text-red-700 border-red-200",
+  };
+
   return (
     <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 hover:shadow-md transition relative">
       <div className="flex items-start justify-between">
@@ -120,6 +127,12 @@ export default function SessionCard({ session, user, onCancel, onRespond }: Sess
               <div className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${statusColors[session.status] || ""}`}>
                 {session.status}
               </div>
+
+              {session.payment_status && session.payment_status !== "Not Paid" && (
+                <div className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${paymentStatusColors[session.payment_status] || "bg-gray-50 text-gray-600 border-gray-200"}`}>
+                  {session.payment_status}
+                </div>
+              )}
 
               {session.course && (
                 <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] font-medium rounded-full border border-gray-200">

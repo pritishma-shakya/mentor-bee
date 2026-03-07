@@ -13,7 +13,7 @@ const formatDate = (date: any) => {
 // Create a new session (student books a session)
 export const bookSession = async (req: AuthRequest, res: Response) => {
   const studentId = req.user?.id;
-  const { mentor_id, date, time, course, notes, type, location } = req.body;
+  const { mentor_id, date, time, course, notes, type, location, payment_status } = req.body;
 
   if (!studentId) return res.status(401).json({ message: "Unauthorized" });
   if (!mentor_id || !date || !time || !course)
@@ -22,10 +22,10 @@ export const bookSession = async (req: AuthRequest, res: Response) => {
   try {
     const { rows } = await pgPool.query(
       `INSERT INTO sessions 
-       (mentor_id, student_id, date, time, course, notes, type, location, status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8, 'Pending')
+       (mentor_id, student_id, date, time, course, notes, type, location, status, payment_status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8, 'Pending', $9)
        RETURNING *`,
-      [mentor_id, studentId, date, time, course, notes || null, type || "Online", location || null]
+      [mentor_id, studentId, date, time, course, notes || null, type || "Online", location || null, payment_status || "Not Paid"]
     );
 
     res.status(201).json({ message: "Session booked", session: rows[0] });
@@ -43,6 +43,18 @@ export const bookSession = async (req: AuthRequest, res: Response) => {
       data: { sessionId: rows[0].id },
       io,
     });
+
+    // If paid via eSewa, send success notification to Student
+    if (payment_status === "Paid") {
+      await createNotification({
+        userId: studentId,
+        type: "booking",
+        title: "Session Booked Successfully",
+        message: `Your payment was successful and your session for ${cleanDate} at ${cleanTime} is confirmed. Awaiting mentor response.`,
+        data: { sessionId: rows[0].id },
+        io,
+      });
+    }
   } catch (err: any) {
     console.error(err);
     if (err.code === "23505") {
