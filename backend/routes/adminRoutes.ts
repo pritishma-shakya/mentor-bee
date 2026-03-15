@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { authenticate } from "../middlewares/authMiddleware";
 import { listMentorRequests, updateMentorStatus, listStudents, listAllUsers, listMentors,
-    getDashboardSummary, getRecentUsers, getPendingMentorCount
+    getDashboardSummary, getRecentUsers, getPendingMentorCount, getTransactions, getAllSessions, markSessionCashPaid
  } from "../controllers/adminController";
 
 const router = Router();
@@ -17,5 +17,8 @@ router.get("/mentors", listMentors);
 router.get("/dashboard/summary", authenticate, getDashboardSummary);
 router.get("/dashboard/recent-users", authenticate, getRecentUsers);
 router.get("/dashboard/pending-mentors", authenticate, getPendingMentorCount);
+router.get("/transactions", getTransactions);
+router.get("/sessions", getAllSessions);
+router.patch("/sessions/:sessionId/mark-paid", markSessionCashPaid);
 
 export default router;

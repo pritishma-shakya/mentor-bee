@@ -7,7 +7,8 @@ export type NotificationType =
   | "reminder" 
   | "message" 
   | "review" 
-  | "interaction";
+  | "interaction"
+  | "reward";
 
 interface CreateNotificationParams {
   userId: string;
@@ -45,6 +46,19 @@ export const createNotification = async ({
     return notification;
   } catch (error) {
     console.error("Error creating notification:", error);
+    return null;
+  }
+};
+
+// Helper to get first admin user's ID
+export const getAdminUserId = async (): Promise<string | null> => {
+  try {
+    const { rows } = await pgPool.query(
+      `SELECT id FROM users WHERE role = 'admin' LIMIT 1`
+    );
+    return rows[0]?.id || null;
+  } catch (error) {
+    console.error("Error getting admin user ID:", error);
     return null;
   }
 };

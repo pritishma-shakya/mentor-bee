@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { toast } from "react-hot-toast";
+import { useRouter } from "next/navigation";
 
 import AuthLayout from "../../layout";
 import MentorSessionCard from "@/components/mentor-session-card";
@@ -38,6 +39,7 @@ export default function ManageBookingsPage() {
     const [sessions, setSessions] = useState<Session[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<"Pending" | "Upcoming" | "History">("Upcoming");
+    const router = useRouter();
 
 
     useEffect(() => {
@@ -59,7 +61,32 @@ export default function ManageBookingsPage() {
                 const sessionsData = await sessionsRes.json();
 
                 if (Array.isArray(sessionsData)) {
-                    setSessions(sessionsData);
+                    // Identify if a session slot has already passed
+                    const isPastSlot = (date: string, time: string) => {
+                        const now = new Date();
+                        const nepalNow = new Date(now.getTime() + (5 * 60 + 45) * 60000);
+                        
+                        const targetDate = new Date(date);
+                        const [hourMin, meridiem] = time.split(" ");
+                        let [hour, minute] = hourMin.split(":").map(Number);
+                        if (meridiem === "PM" && hour !== 12) hour += 12;
+                        if (meridiem === "AM" && hour === 12) hour = 0;
+                        targetDate.setHours(hour, minute, 0, 0);
+            
+                        return targetDate < nepalNow;
+                    };
+
+                    const mappedSessions = sessionsData.map((session: Session) => {
+                        if (
+                            !["Completed", "Started", "Cancelled", "Rejected"].includes(session.status) &&
+                            isPastSlot(session.date, session.time)
+                        ) {
+                            return { ...session, status: "Cancelled" as const };
+                        }
+                        return session;
+                    });
+
+                    setSessions(mappedSessions);
                 } else {
                     console.error("Received invalid sessions data:", sessionsData);
                 }
@@ -118,6 +145,10 @@ export default function ManageBookingsPage() {
 
     // Filter Logic
     const refinedFilteredSessions = sessions.filter(session => {
+        const sessionDate = new Date(session.date);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
         if (activeTab === "Pending") {
             return (
                 session.status === "Pending" ||
@@ -130,9 +161,14 @@ export default function ManageBookingsPage() {
                 ['Accepted', 'Started'].includes(session.status) ||
                 (session.status === "Cancel Requested" && session.cancel_requested_by === user?.id) ||
                 (session.status === "Reschedule Requested" && session.reschedule_requested_by === user?.id)
+            ) && sessionDate >= today;
+        }
+        if (activeTab === "History") {
+            return (
+                ['Completed', 'Rejected', 'Cancelled'].includes(session.status) ||
+                (sessionDate < today && !["Pending", "Accepted", "Started", "Cancel Requested", "Reschedule Requested"].includes(session.status))
             );
         }
-        if (activeTab === "History") return ['Completed', 'Rejected', 'Cancelled'].includes(session.status);
         return false;
     });
 
@@ -155,6 +191,24 @@ export default function ManageBookingsPage() {
         } catch (err) {
             console.error(err);
             toast.error("Reschedule request failed");
+        }
+    };
+
+    const handleMarkCashPaid = async (id: string) => {
+        try {
+            const res = await fetch(`http://localhost:5000/api/sessions/${id}/mark-cash-paid`, {
+                method: "PATCH",
+                credentials: "include",
+            });
+            if (!res.ok) throw new Error("Failed to mark as paid");
+            toast.success("Session marked as cash paid!");
+
+            const sessionsRes = await fetch("http://localhost:5000/api/sessions/mentor", { credentials: "include" });
+            const data = await sessionsRes.json();
+            if (Array.isArray(data)) setSessions(data);
+        } catch (err) {
+            console.error(err);
+            toast.error("Failed to mark as paid");
         }
     };
 
@@ -275,6 +329,10 @@ export default function ManageBookingsPage() {
                                             const sessionsRes = await fetch("http://localhost:5000/api/sessions/mentor", { credentials: "include" });
                                             const data = await sessionsRes.json();
                                             if (Array.isArray(data)) setSessions(data);
+
+                                            if (status === "Started" && session.type === "Online") {
+                                                router.push(`/session-call/${sessionId}`);
+                                            }
                                 
                                         } catch (error) {
                                             console.error(error);
@@ -311,6 +369,7 @@ export default function ManageBookingsPage() {
                                 }}
                                 onRespond={handleRespondToRequest}
                                 onReschedule={handleRescheduleSession}
+                                onMarkCashPaid={handleMarkCashPaid}
                             />
                         ))}
                     </div>

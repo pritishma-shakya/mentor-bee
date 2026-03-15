@@ -41,6 +41,12 @@ function PaymentSuccessContent() {
 
                 const payload = JSON.parse(pendingBookingStr);
                 payload.payment_status = "Paid"; // Force status to Paid on success
+                
+                // Pass eSewa transaction details so backend can record the revenue split
+                payload.transaction_uuid = decodedData.transaction_uuid || null;
+                payload.total_amount = decodedData.total_amount
+                  ? parseFloat(decodedData.total_amount)
+                  : null;
 
                 // Book the session
                 const bookRes = await fetch("http://localhost:5000/api/sessions", {

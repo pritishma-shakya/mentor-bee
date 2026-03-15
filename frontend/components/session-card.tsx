@@ -100,6 +100,45 @@ export default function SessionCard({ session, user, onCancel, onRespond }: Sess
     "Not Paid": "bg-red-50 text-red-700 border-red-200",
   };
 
+
+  const renderActions = (isExpanded: boolean) => {
+    return (
+      <div className={`flex gap-2 flex-wrap ${isExpanded ? 'pt-2' : 'mt-4'}`}>
+        {(session.status === "Accepted" || session.status === "Started") && session.type === 'Online' ? (
+          <Link href={`/session-call/${session.id}`} className={`${isExpanded ? 'px-6 py-2' : 'px-4 py-1.5'} bg-orange-600 hover:bg-orange-700 text-white font-semibold rounded-lg ${isExpanded ? 'text-sm' : 'text-xs'} flex items-center justify-center gap-2 transition shadow-sm`}>
+            <Video className={isExpanded ? "w-4 h-4" : "w-3.5 h-3.5"} />
+            Join Session
+          </Link>
+        ) : (session.status === "Accepted" || session.status === "Started") && session.type === 'In-Person' ? (
+          <button className={`${isExpanded ? 'px-6 py-2' : 'px-4 py-1.5'} bg-orange-600 hover:bg-orange-700 text-white font-semibold rounded-lg ${isExpanded ? 'text-sm' : 'text-xs'} flex items-center justify-center gap-2 transition shadow-sm`}>
+            <Play className={isExpanded ? "w-4 h-4" : "w-3.5 h-3.5"} />
+            {session.status === "Started" ? "Continue Session" : "Start Session"}
+          </button>
+        ) : null}
+
+        <Link href={`/messages?mentorId=${session.mentor_user_id}`} className={`${isExpanded ? 'px-6 py-2' : 'px-4 py-1.5'} border border-gray-300 bg-white hover:bg-gray-50 rounded-lg font-medium ${isExpanded ? 'text-sm' : 'text-xs'} text-gray-800 flex items-center gap-2 transition shadow-sm`}>
+          <MessageCircle className={isExpanded ? "w-4 h-4" : "w-3.5 h-3.5"} /> Message
+        </Link>
+
+        {/* ACTION BUTTONS */}
+        {["Accepted", "Pending"].includes(session.status) && (
+          <Link 
+            href={`/book-session/${session.mentor_id}?rescheduleSessionId=${session.id}`}
+            className={`${isExpanded ? 'px-4 py-2 text-sm' : 'px-4 py-1.5 text-xs'} border border-orange-200 text-orange-600 hover:bg-orange-50 rounded-lg font-medium transition flex items-center gap-2`}
+          >
+            <Calendar className={isExpanded ? "w-4 h-4" : "w-3.5 h-3.5"} /> Reschedule
+          </Link>
+        )}
+
+        {["Pending", "Accepted", "Reschedule Requested"].includes(session.status) && onCancel && session.status !== "Cancel Requested" && (
+          <button onClick={() => setShowCancelConfirm(true)} className={`${isExpanded ? 'px-4 py-2 text-sm' : 'px-4 py-1.5 text-xs'} text-red-600 hover:bg-red-50 rounded-lg font-medium transition flex items-center gap-2`}>
+            <XCircle className={isExpanded ? "w-4 h-4" : "w-3.5 h-3.5"} /> Cancel
+          </button>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 hover:shadow-md transition relative">
       <div className="flex items-start justify-between">
@@ -248,59 +287,11 @@ export default function SessionCard({ session, user, onCancel, onRespond }: Sess
             </div>
           )}
 
-          <div className="flex gap-2 flex-wrap pt-2">
-            {(session.status === "Accepted" || session.status === "Started") && (
-              <button className="px-6 py-2 bg-orange-600 hover:bg-orange-700 text-white font-semibold rounded-lg text-sm flex items-center justify-center gap-2 transition shadow-sm">
-                {session.type === 'Online' ? <Video className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                {session.type === 'Online' ? 'Join Session' : 'Start Session'}
-              </button>
-            )}
-
-            <Link href={`/messages?mentorId=${session.mentor_user_id}`} className="px-6 py-2 border border-gray-300 bg-white hover:bg-gray-50 rounded-lg font-medium text-sm text-gray-800 flex items-center gap-2 transition shadow-sm">
-              <MessageCircle className="w-4 h-4" /> Message
-            </Link>
-
-            {/* ACTION BUTTONS */}
-            {["Accepted", "Pending"].includes(session.status) && (
-              <Link 
-                href={`/book-session/${session.mentor_id}?rescheduleSessionId=${session.id}`}
-                className="px-4 py-2 border border-orange-200 text-orange-600 hover:bg-orange-50 rounded-lg font-medium text-sm transition flex items-center gap-2"
-              >
-                <Calendar className="w-4 h-4" /> Reschedule
-              </Link>
-            )}
-
-            {["Pending", "Accepted", "Reschedule Requested"].includes(session.status) && onCancel && session.status !== "Cancel Requested" && (
-              <button onClick={() => setShowCancelConfirm(true)} className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg font-medium text-sm transition flex items-center gap-2">
-                <XCircle className="w-4 h-4" /> Cancel
-              </button>
-            )}
-          </div>
+          {renderActions(true)}
         </div>
       )}
 
-      {!expanded && (
-        <div className="flex gap-2 flex-wrap mt-4">
-          <Link href={`/messages?mentorId=${session.mentor_user_id}`} className="px-4 py-1.5 border border-gray-300 bg-white hover:bg-gray-50 rounded-lg font-medium text-xs text-gray-800 flex items-center gap-1.5 transition shadow-sm">
-            <MessageCircle className="w-3.5 h-3.5" /> Message
-          </Link>
-
-          {["Accepted", "Pending"].includes(session.status) && (
-            <Link 
-              href={`/book-session/${session.mentor_id}?rescheduleSessionId=${session.id}`}
-              className="px-4 py-1.5 border border-orange-200 text-orange-600 hover:bg-orange-50 rounded-lg font-medium text-xs transition flex items-center gap-1.5"
-            >
-              <Calendar className="w-3.5 h-3.5" /> Reschedule
-            </Link>
-          )}
-
-          {["Pending", "Accepted", "Reschedule Requested"].includes(session.status) && onCancel && session.status !== "Cancel Requested" && (
-            <button onClick={() => setShowCancelConfirm(true)} className="px-4 py-1.5 text-red-600 hover:bg-red-50 rounded-lg font-medium text-xs transition flex items-center gap-1.5">
-              <XCircle className="w-3.5 h-3.5" /> Cancel
-            </button>
-          )}
-        </div>
-      )}
+      {!expanded && renderActions(false)}
 
       {/* Confirmation Modals */}
       {showCancelConfirm && (

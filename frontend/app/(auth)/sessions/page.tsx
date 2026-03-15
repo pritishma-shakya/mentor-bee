@@ -7,7 +7,7 @@ import {
   MapPin,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
-import AuthLayout from "../layout"; // adjust path if needed
+import AuthLayout from "../layout";
 import SessionCard from "@/components/session-card";
 
 interface User {
@@ -105,7 +105,33 @@ export default function SessionsPage() {
         const sessionsData = await sessionsRes.json();
 
         if (Array.isArray(sessionsData)) {
-          setSessions(sessionsData);
+          // Identify if a session slot has already passed
+          const isPastSlot = (date: string, time: string) => {
+            const now = new Date();
+            // Optional: approximate Nepal Time context if preferred
+            const nepalNow = new Date(now.getTime() + (5 * 60 + 45) * 60000);
+
+            const targetDate = new Date(date);
+            const [hourMin, meridiem] = time.split(" ");
+            let [hour, minute] = hourMin.split(":").map(Number);
+            if (meridiem === "PM" && hour !== 12) hour += 12;
+            if (meridiem === "AM" && hour === 12) hour = 0;
+            targetDate.setHours(hour, minute, 0, 0);
+
+            return targetDate < nepalNow;
+          };
+
+          const mappedSessions = sessionsData.map((session: Session) => {
+            if (
+              !["Completed", "Started", "Cancelled", "Rejected"].includes(session.status) &&
+              isPastSlot(session.date, session.time)
+            ) {
+              return { ...session, status: "Cancelled" as const };
+            }
+            return session;
+          });
+
+          setSessions(mappedSessions);
         } else {
           console.error("Expected array from /api/sessions/student, got:", sessionsData);
           setSessions([]);

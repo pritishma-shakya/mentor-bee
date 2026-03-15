@@ -48,6 +48,10 @@ export const initSocket = (io: Server) => {
       socket.emit("load_messages", messages);
     });
 
+    socket.on("join_session", (sessionId: string) => {
+      socket.join(`session_${sessionId}`);
+    });
+
     socket.on("mark_read", async (conversationId: string) => {
       try {
         await markMessagesAsRead(conversationId, socket.data.user.id);

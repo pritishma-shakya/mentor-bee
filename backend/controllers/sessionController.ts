@@ -1,7 +1,8 @@
 import { Response } from "express";
 import { pgPool } from "../config/database";
 import { AuthRequest } from "../middlewares/authMiddleware";
-import { createNotification } from "../utils/notificationService";
+import { createNotification, getAdminUserId } from "../utils/notificationService";
+import { handleSessionBookingPoints, handleSessionCompletionPoints } from "../utils/rewardsService";
 
 // Helper to format date cleanly (YYYY-MM-DD)
 const formatDate = (date: any) => {
@@ -13,14 +14,19 @@ const formatDate = (date: any) => {
 // Create a new session (student books a session)
 export const bookSession = async (req: AuthRequest, res: Response) => {
   const studentId = req.user?.id;
-  const { mentor_id, date, time, course, notes, type, location, payment_status } = req.body;
+  const { mentor_id, date, time, course, notes, type, location, payment_status, transaction_uuid, total_amount } = req.body;
 
   if (!studentId) return res.status(401).json({ message: "Unauthorized" });
   if (!mentor_id || !date || !time || !course)
     return res.status(400).json({ message: "Missing required fields" });
 
+  const client = await pgPool.connect();
+  
   try {
-    const { rows } = await pgPool.query(
+    await client.query('BEGIN');
+    
+    // 1. Create session
+    const { rows: sessionRows } = await client.query(
       `INSERT INTO sessions 
        (mentor_id, student_id, date, time, course, notes, type, location, status, payment_status)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8, 'Pending', $9)
@@ -28,40 +34,85 @@ export const bookSession = async (req: AuthRequest, res: Response) => {
       [mentor_id, studentId, date, time, course, notes || null, type || "Online", location || null, payment_status || "Not Paid"]
     );
 
-    res.status(201).json({ message: "Session booked", session: rows[0] });
+    const newSession = sessionRows[0];
+    
+    // 2. Insert payment record if Paid
+    if (payment_status === "Paid") {
+      // Handle the case where total_amount might not be passed explicitly
+      let amountToCharge = total_amount;
+      if (!amountToCharge) {
+         const { rows: mentorInfo } = await client.query(`SELECT hourly_rate FROM mentors WHERE id = $1`, [mentor_id]);
+         amountToCharge = mentorInfo[0]?.hourly_rate || 0;
+      }
+      
+      const adminRev = amountToCharge * 0.20;
+      const mentorRev = amountToCharge * 0.80;
+      
+      await client.query(
+        `INSERT INTO payments 
+         (session_id, student_id, mentor_id, transaction_uuid, total_amount, admin_revenue, mentor_revenue)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [newSession.id, studentId, mentor_id, transaction_uuid || null, amountToCharge, adminRev, mentorRev]
+      );
+    }
+    
+    // Give booking points (loyalty + first booking logic handled inside)
+    await handleSessionBookingPoints(studentId, mentor_id, client);
+    
+    await client.query('COMMIT');
+
+    res.status(201).json({ message: "Session booked", session: newSession });
 
     // Send Notification to Mentor
     const io = req.app.get("io");
     const mentorUserId = await getMentorUserId(mentor_id);
-    const cleanTime = rows[0].time.split(':').slice(0, 2).join(':'); // HH:MM
+    const cleanTime = newSession.time.split(':').slice(0, 2).join(':'); // HH:MM
     const cleanDate = formatDate(date);
     await createNotification({
       userId: mentorUserId,
       type: "booking",
       title: "New Booking Request",
       message: `${req.user?.name || "A student"} has booked a mentorship session with you for ${cleanDate} at ${cleanTime}. Please review and respond to the booking request.`,
-      data: { sessionId: rows[0].id },
+      data: { sessionId: newSession.id },
       io,
     });
 
-    // If paid via eSewa, send success notification to Student
+    // If paid via eSewa, send success notification to Student AND Admin
     if (payment_status === "Paid") {
       await createNotification({
         userId: studentId,
         type: "booking",
         title: "Session Booked Successfully",
         message: `Your payment was successful and your session for ${cleanDate} at ${cleanTime} is confirmed. Awaiting mentor response.`,
-        data: { sessionId: rows[0].id },
+        data: { sessionId: newSession.id },
         io,
       });
+
+      // Admin payment notification
+      try {
+        const adminId = await getAdminUserId();
+        if (adminId) {
+          await createNotification({
+            userId: adminId,
+            type: "interaction",
+            title: "New eSewa Payment Received",
+            message: `${req.user?.name || "A student"} paid for a session on ${cleanDate} at ${cleanTime}.`,
+            data: { sessionId: newSession.id },
+            io,
+          });
+        }
+      } catch (e) { console.error("Admin payment notif failed:", e); }
     }
   } catch (err: any) {
+    await client.query('ROLLBACK');
     console.error(err);
     if (err.code === "23505") {
       // Unique violation: double booking
       return res.status(400).json({ message: "Time slot already booked" });
     }
     res.status(500).json({ message: "Server error" });
+  } finally {
+    client.release();
   }
 };
 
@@ -167,6 +218,31 @@ export const updateSessionStatus = async (req: AuthRequest, res: Response) => {
         data: { sessionId: session.id },
         io,
       });
+    } else if (status === "Completed") {
+      // Emit session_completed event to the session room
+      io.to(`session_${sessionId}`).emit("session_completed", session);
+
+      // Notify admin of completed session
+      try {
+        const adminId = await getAdminUserId();
+        if (adminId) {
+          await createNotification({
+            userId: adminId,
+            type: "interaction",
+            title: "Session Completed",
+            message: `A session scheduled for ${cleanDate} at ${cleanTime} has been marked as completed.`,
+            data: { sessionId: session.id },
+            io,
+          });
+        }
+      } catch (e) { console.error("Admin session complete notif failed:", e); }
+
+      // Give Completion points
+      try {
+        await handleSessionCompletionPoints(session.student_id, session.mentor_id);
+      } catch (e) {
+        console.error("Error giving completion points", e);
+      }
     }
   } catch (err) {
     console.error("Error updating session status:", err);
@@ -359,3 +435,47 @@ async function getMentorUserId(mentorId: string) {
     const { rows } = await pgPool.query(`SELECT user_id FROM mentors WHERE id = $1`, [mentorId]);
     return rows[0]?.user_id;
 }
+
+// Mark an in-person session as cash paid (called by mentor)
+export const markSessionCashPaid = async (req: AuthRequest, res: Response) => {
+  const { sessionId } = req.params;
+  const client = await pgPool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: sessionRows } = await client.query(
+      `UPDATE sessions SET payment_status = 'Paid' WHERE id = $1 RETURNING *`,
+      [sessionId]
+    );
+    if (!sessionRows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: "Session not found" });
+    }
+    const session = sessionRows[0];
+
+    const { rows: existingPayment } = await client.query(
+      `SELECT id FROM payments WHERE session_id = $1`, [sessionId]
+    );
+
+    if (!existingPayment.length) {
+      const { rows: mentorInfo } = await client.query(
+        `SELECT hourly_rate FROM mentors WHERE id = $1`, [session.mentor_id]
+      );
+      const amount = mentorInfo[0]?.hourly_rate || 0;
+      await client.query(
+        `INSERT INTO payments (session_id, student_id, mentor_id, total_amount, admin_revenue, mentor_revenue)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [sessionId, session.student_id, session.mentor_id, amount, amount * 0.20, amount * 0.80]
+      );
+    }
+
+    await client.query('COMMIT');
+    res.json({ message: "Marked as cash paid" });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error("markSessionCashPaid error:", err);
+    res.status(500).json({ message: "Server error" });
+  } finally {
+    client.release();
+  }
+};

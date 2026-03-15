@@ -32,6 +32,7 @@ interface Session {
     reschedule_requested_by?: string;
     rescheduled_date?: string;
     rescheduled_time?: string;
+    payment_status?: "Paid" | "Not Paid";
 }
 
 interface MentorSessionCardProps {
@@ -44,6 +45,7 @@ interface MentorSessionCardProps {
     onStart?: (id: string) => void;
     onRespond?: (id: string, type: "reschedule" | "cancel", action: "accept" | "reject") => void;
     onReschedule?: (id: string, date: string, time: string) => void;
+    onMarkCashPaid?: (id: string) => void;
 }
 
 const formatDate = (date: string | undefined) => {
@@ -66,6 +68,7 @@ export default function MentorSessionCard({
     onComplete,
     onStart,
     onRespond,
+    onMarkCashPaid,
 }: MentorSessionCardProps) {
     const [expanded, setExpanded] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
@@ -307,6 +310,35 @@ export default function MentorSessionCard({
                             <p className="italic bg-gray-50 p-2 rounded-lg border border-gray-100 mt-1">"{session.notes}"</p>
                         </div>
                     )}
+
+                    {/* Payment Status */}
+                    <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                        <div className="flex items-center gap-2">
+                            <span className="text-gray-500 text-xs">Payment:</span>
+                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                                session.payment_status === "Paid"
+                                    ? "bg-green-100 text-green-700"
+                                    : "bg-gray-100 text-gray-500"
+                            }`}>
+                                {session.payment_status === "Paid" ? "✓ Paid" : "Not Paid"}
+                            </span>
+                            {session.type === "Online" && session.payment_status === "Paid" && (
+                                <span className="text-[10px] text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded-full">eSewa</span>
+                            )}
+                            {session.type === "In-Person" && session.payment_status === "Paid" && (
+                                <span className="text-[10px] text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded-full">Cash</span>
+                            )}
+                        </div>
+                        {/* Mark Cash Paid button for mentor on in-person unpaid sessions */}
+                        {session.type === "In-Person" && session.payment_status !== "Paid" && onMarkCashPaid && (
+                            <button
+                                onClick={() => onMarkCashPaid(session.id)}
+                                className="text-xs font-semibold text-green-700 border border-green-300 px-3 py-1 rounded-lg hover:bg-green-50 transition"
+                            >
+                                Mark Cash Received
+                            </button>
+                        )}
+                    </div>
 
                     {renderActions(true)}
                 </div>

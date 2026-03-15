@@ -4,7 +4,9 @@ import {
   getMentorProfile,
   updateMentorProfile,
   listMentors,
-  listExpertise
+  listExpertise,
+  getMentorEarnings,
+  getMentorDashboardStats
 } from "../controllers/mentorController";
 import { authenticate } from "../middlewares/authMiddleware";
 import { upload } from "../middlewares/uploadMiddleware";
@@ -15,6 +17,8 @@ router.get("/expertise", listExpertise);
 router.post("/setup", authenticate, upload.single("profilePicture"), setupMentorProfile);
 router.put("/update", authenticate, updateMentorProfile);
 router.get("/", listMentors); // list all mentors
+router.get("/earnings", authenticate, getMentorEarnings); // mentor earnings (80%)
+router.get("/dashboard-stats", authenticate, getMentorDashboardStats); // mentor dashboard stats
 router.get("/:mentorId", getMentorProfile); // dynamic route must come last
 
 // routes/mentorRoutes.ts

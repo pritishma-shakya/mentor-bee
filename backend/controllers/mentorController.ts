@@ -297,3 +297,131 @@ export const listMentors = async (_req: AuthRequest, res: Response) => {
     client.release();
   }
 };
+
+// =====================
+// Get mentor earnings (80% revenue split)
+// =====================
+export const getMentorEarnings = async (req: AuthRequest, res: Response) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+
+  const client = await pgPool.connect();
+  try {
+    // Get the mentor record for this user
+    const { rows: mentorRows } = await client.query(
+      `SELECT id FROM mentors WHERE user_id = $1`,
+      [userId]
+    );
+    if (!mentorRows.length) {
+      return res.status(404).json({ success: false, message: "Mentor not found" });
+    }
+    const mentorId = mentorRows[0].id;
+
+    // Get summary stats
+    const { rows: summaryRows } = await client.query(
+      `SELECT 
+         SUM(mentor_revenue) as total_revenue,
+         COUNT(*) as total_payments
+       FROM payments
+       WHERE mentor_id = $1`,
+      [mentorId]
+    );
+
+    // Monthly earnings (last 6 months)
+    const { rows: monthlyRows } = await client.query(
+      `SELECT 
+         TO_CHAR(created_at, 'Mon YYYY') as month,
+         SUM(mentor_revenue) as revenue
+       FROM payments
+       WHERE mentor_id = $1 AND created_at >= NOW() - INTERVAL '6 months'
+       GROUP BY TO_CHAR(created_at, 'Mon YYYY'), DATE_TRUNC('month', created_at)
+       ORDER BY DATE_TRUNC('month', created_at) ASC`,
+      [mentorId]
+    );
+
+    // Recent transactions
+    const { rows: transactions } = await client.query(
+      `SELECT p.id, p.transaction_uuid, p.total_amount, p.mentor_revenue, p.created_at,
+              u.name as student_name, u.email as student_email
+       FROM payments p
+       JOIN users u ON p.student_id = u.id
+       WHERE p.mentor_id = $1
+       ORDER BY p.created_at DESC`,
+      [mentorId]
+    );
+
+    res.json({
+      success: true,
+      data: {
+        totalRevenue: summaryRows[0].total_revenue ? parseFloat(summaryRows[0].total_revenue) : 0,
+        totalPayments: parseInt(summaryRows[0].total_payments),
+        monthlyEarnings: monthlyRows,
+        transactions,
+      },
+    });
+  } catch (err) {
+    console.error("getMentorEarnings error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  } finally {
+    client.release();
+  }
+};
+
+// =====================
+// Get mentor dashboard stats (sessions, students, recent activity)
+// =====================
+export const getMentorDashboardStats = async (req: AuthRequest, res: Response) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+
+  const client = await pgPool.connect();
+  try {
+    // Get the mentor record for this user
+    const { rows: mentorRows } = await client.query(
+      `SELECT id FROM mentors WHERE user_id = $1`,
+      [userId]
+    );
+    if (!mentorRows.length) {
+      return res.status(404).json({ success: false, message: "Mentor not found" });
+    }
+    const mentorId = mentorRows[0].id;
+
+    // Total sessions
+    const { rows: sessionCountRows } = await client.query(
+      `SELECT COUNT(*) as total FROM sessions WHERE mentor_id = $1`,
+      [mentorId]
+    );
+
+    // Unique students
+    const { rows: studentCountRows } = await client.query(
+      `SELECT COUNT(DISTINCT student_id) as total FROM sessions WHERE mentor_id = $1`,
+      [mentorId]
+    );
+
+    // Recent sessions (last 5)
+    const { rows: recentSessions } = await client.query(
+      `SELECT s.id, s.date, s.time, s.course, s.status, s.type,
+              u.name as student_name, u.profile_picture as student_picture
+       FROM sessions s
+       JOIN users u ON u.id = s.student_id
+       WHERE s.mentor_id = $1
+       ORDER BY s.date DESC, s.time DESC
+       LIMIT 5`,
+      [mentorId]
+    );
+
+    res.json({
+      success: true,
+      data: {
+        totalSessions: parseInt(sessionCountRows[0].total),
+        totalStudents: parseInt(studentCountRows[0].total),
+        recentSessions,
+      },
+    });
+  } catch (err) {
+    console.error("getMentorDashboardStats error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  } finally {
+    client.release();
+  }
+};

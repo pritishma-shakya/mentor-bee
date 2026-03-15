@@ -108,6 +108,9 @@ export default function NotificationDropdown({ socket, user }: { socket: any, us
       case "interaction":
         router.push("/community");
         break;
+      case "reward":
+        router.push("/rewards");
+        break;
       default:
         // No redirection for other types
         break;

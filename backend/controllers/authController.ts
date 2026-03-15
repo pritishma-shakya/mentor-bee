@@ -3,6 +3,8 @@ import bcrypt from "bcryptjs";
 import { pgPool } from "../config/database";
 import { generateToken } from "../utils/generateToken";
 import { AuthRequest } from "../middlewares/authMiddleware";
+import { createNotification, getAdminUserId } from "../utils/notificationService";
+import { addPoints, handleLoginPoints } from "../utils/rewardsService";
 
 export type UserRole = "student" | "mentor" | "admin";
 const VALID_ROLES: UserRole[] = ["student", "mentor", "admin"];
@@ -54,11 +56,34 @@ export const signup = async (req: AuthRequest, res: Response) => {
     const token = generateToken(user.id, user.email, user.role);
 
     // set separate cookie
-    if (user.role === "student") res.cookie("student_auth_token", token, authCookieOptions);
-    else if (user.role === "mentor") res.cookie("mentor_auth_token", token, authCookieOptions);
-    else res.cookie("admin_auth_token", token, authCookieOptions);
+    if (user.role === "student") {
+      res.cookie("student_auth_token", token, authCookieOptions);
+      await addPoints(user.id, 20, "First account registration", client);
+    } else if (user.role === "mentor") {
+      res.cookie("mentor_auth_token", token, authCookieOptions);
+    } else {
+      res.cookie("admin_auth_token", token, authCookieOptions);
+    }
 
     await client.query("COMMIT");
+
+    // Notify admin of new user registration
+    try {
+      const io = (req as any).app?.get?.("io");
+      const adminId = await getAdminUserId();
+      if (adminId) {
+        await createNotification({
+          userId: adminId,
+          type: "interaction",
+          title: "New User Registered",
+          message: `${name} just signed up as a ${role} on MentorBee.`,
+          data: { newUserId: user.id, role },
+          io,
+        });
+      }
+    } catch (notifErr) {
+      console.error("Admin notification failed:", notifErr);
+    }
 
     res.status(201).json({ success: true, user });
   } catch (err) {
@@ -94,9 +119,14 @@ export const login = async (req: AuthRequest, res: Response) => {
     res.clearCookie("mentor_auth_token", clearCookieOptions);
 
     // set new cookie based on role
-    if (user.role === "student") res.cookie("student_auth_token", token, authCookieOptions);
-    else if (user.role === "mentor") res.cookie("mentor_auth_token", token, authCookieOptions);
-    else res.cookie("admin_auth_token", token, authCookieOptions);
+    if (user.role === "student") {
+      res.cookie("student_auth_token", token, authCookieOptions);
+      try { await handleLoginPoints(user.id); } catch(e) { console.error("Error giving login points", e); }
+    } else if (user.role === "mentor") {
+      res.cookie("mentor_auth_token", token, authCookieOptions);
+    } else {
+      res.cookie("admin_auth_token", token, authCookieOptions);
+    }
 
     res.json({
       success: true,

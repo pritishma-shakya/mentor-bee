@@ -129,21 +129,44 @@ export const getRewards = async (req: AuthRequest, res: Response) => {
 
   const client = await pgPool.connect();
   try {
-    const { rows } = await client.query(
-      `SELECT 
-         COALESCE(SUM(total_points), 0) AS points,
-         COUNT(*) AS sessions
+    const { rows: pointsRows } = await client.query(
+      `SELECT COALESCE(SUM(points), 0) AS points
        FROM rewards
        WHERE student_id = $1`,
       [req.user!.id]
     );
 
+    const { rows: sessionsRows } = await client.query(
+       `SELECT COUNT(*) AS sessions FROM sessions WHERE student_id = $1 AND status = 'Completed'`,
+       [req.user!.id]
+    );
+
+    const { rows: activitiesRows } = await client.query(
+      `SELECT created_at, action, points
+       FROM rewards
+       WHERE student_id = $1
+       ORDER BY created_at DESC
+       LIMIT 5`,
+      [req.user!.id]
+    );
+
+    const formattedActivities = activitiesRows.map(r => {
+       const dateObj = new Date(r.created_at);
+       const dFormatter = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+       return {
+         date: dFormatter.format(dateObj),
+         desc: r.action,
+         points: `+${r.points}`
+       };
+    });
+
     res.json({
       success: true,
       data: {
-        points: Number(rows[0].points),
-        sessions: Number(rows[0].sessions),
-        hours: Number(rows[0].sessions) * 1, // example logic
+        points: Number(pointsRows[0].points),
+        sessions: Number(sessionsRows[0].sessions),
+        hours: Number(sessionsRows[0].sessions) * 1,
+        recentActivities: formattedActivities
       },
     });
   } catch (err) {

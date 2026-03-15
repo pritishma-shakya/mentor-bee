@@ -183,27 +183,33 @@ export default function RewardsPage() {
               <ul className="space-y-3">
                 <li className="flex items-start gap-2">
                   <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-green-600 text-xs font-bold">+50</span>
+                    <span className="text-green-600 text-xs font-bold">+20</span>
                   </div>
-                  <p className="text-sm text-gray-700">Complete a mentor session</p>
+                  <p className="text-sm text-gray-700">First account registration</p>
                 </li>
                 <li className="flex items-start gap-2">
                   <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-blue-600 text-xs font-bold">+25</span>
+                    <span className="text-blue-600 text-xs font-bold">+15</span>
                   </div>
-                  <p className="text-sm text-gray-700">Book a mentor session</p>
+                  <p className="text-sm text-gray-700">Book your first session</p>
                 </li>
                 <li className="flex items-start gap-2">
                   <div className="w-5 h-5 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0 mt-0.5">
                     <span className="text-purple-600 text-xs font-bold">+10</span>
                   </div>
-                  <p className="text-sm text-gray-700">Write a session feedback</p>
+                  <p className="text-sm text-gray-700">Complete a mentorship session</p>
                 </li>
                 <li className="flex items-start gap-2">
                   <div className="w-5 h-5 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-amber-600 text-xs font-bold">+100</span>
+                    <span className="text-amber-600 text-xs font-bold">+5</span>
                   </div>
-                  <p className="text-sm text-gray-700">Maintain a 7-day booking streak</p>
+                  <p className="text-sm text-gray-700">Weekly login & Community post</p>
+                </li>
+                <li className="flex items-start gap-2">
+                  <div className="w-5 h-5 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="text-red-600 text-xs font-bold">+50</span>
+                  </div>
+                  <p className="text-sm text-gray-700">Milestone: 10 sessions completed</p>
                 </li>
               </ul>
             </div>

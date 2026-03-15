@@ -218,8 +218,8 @@ export default function BookSessionPage() {
         payload.newTime = selectedTime;
       }
 
-      if (paymentMethod === "eSewa") {
-        const transactionId = rescheduleSessionId || `MB-${Date.now()}`;
+      if (paymentMethod === "eSewa" && !rescheduleSessionId) {
+        const transactionId = `MB-${Date.now()}`;
 
         // Save pending booking details to localStorage
         localStorage.setItem("pending_booking", JSON.stringify(payload));
@@ -348,14 +348,26 @@ export default function BookSessionPage() {
             <span className="text-sm font-semibold text-gray-900">Details</span>
           </div>
 
-          <div className="flex-1 h-0.5 bg-gray-200 max-w-[80px]" />
+          <div className="flex-1 h-0.5 bg-gray-200 min-w-[30px] max-w-[50px]" />
 
           <div className="flex items-center gap-2">
-            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-medium ${step === 3 ? "bg-orange-600" : step > 3 ? "bg-green-600" : "bg-gray-300"}`}>
-              {step > 3 ? <CheckCircle2 className="w-4 h-4" /> : "3"}
+            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-medium ${step === 2 ? "bg-orange-600" : step > 2 ? "bg-green-600" : "bg-gray-300"}`}>
+              {step > 2 ? <CheckCircle2 className="w-4 h-4" /> : "2"}
             </div>
-            <span className="text-sm font-semibold text-gray-900">Payment</span>
+            <span className="text-sm font-semibold text-gray-900">Summary</span>
           </div>
+
+          {!rescheduleSessionId && (
+            <>
+              <div className="flex-1 h-0.5 bg-gray-200 min-w-[30px] max-w-[50px]" />
+              <div className="flex items-center gap-2">
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-medium ${step === 3 ? "bg-orange-600" : step > 3 ? "bg-green-600" : "bg-gray-300"}`}>
+                  {step > 3 ? <CheckCircle2 className="w-4 h-4" /> : "3"}
+                </div>
+                <span className="text-sm font-semibold text-gray-900">Payment</span>
+              </div>
+            </>
+          )}
         </div>
 
         {step === 1 && (
@@ -566,18 +578,28 @@ export default function BookSessionPage() {
               >
                 Back
               </button>
-              <button
-                onClick={() => setStep(3)}
-                disabled={isSubmitting}
-                className="flex-1 py-3.5 bg-orange-600 text-white text-sm font-bold rounded-lg hover:bg-orange-700 transition shadow-lg shadow-orange-100"
-              >
-                Proceed to Payment
-              </button>
+              {rescheduleSessionId ? (
+                <button
+                  onClick={handleFinalSubmit}
+                  disabled={isSubmitting}
+                  className={`flex-1 py-3.5 bg-green-600 text-white text-sm font-bold rounded-lg hover:bg-green-700 transition shadow-lg shadow-green-100 ${isSubmitting ? "opacity-50 cursor-not-allowed" : ""}`}
+                >
+                  {isSubmitting ? "Processing..." : "Confirm Reschedule"}
+                </button>
+              ) : (
+                <button
+                  onClick={() => setStep(3)}
+                  disabled={isSubmitting}
+                  className="flex-1 py-3.5 bg-orange-600 text-white text-sm font-bold rounded-lg hover:bg-orange-700 transition shadow-lg shadow-orange-100"
+                >
+                  Proceed to Payment
+                </button>
+              )}
             </div>
           </div>
         )}
 
-        {step === 3 && (
+        {step === 3 && !rescheduleSessionId && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 animate-in fade-in zoom-in-95 duration-300">
             <div className="text-center mb-8">
               <div className="w-14 h-14 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">

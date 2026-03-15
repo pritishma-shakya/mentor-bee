@@ -3,6 +3,7 @@ import { pgPool } from "../config/database";
 import { AuthRequest } from "../middlewares/authMiddleware";
 import cloudinary from "../config/cloudinary";
 import { createNotification } from "../utils/notificationService";
+import { addPoints } from "../utils/rewardsService";
 
 // ---------------- Posts ----------------
 export const getPosts = async (_req: AuthRequest, res: Response) => {
@@ -107,6 +108,13 @@ export const createPost = async (req: AuthRequest, res: Response) => {
 
     await client.query("COMMIT");
 
+    // Give points for creating a post
+    try {
+      if (req.user.role === "student") {
+        await addPoints(req.user.id, 5, "Created a community post");
+      }
+    } catch (e) { console.error("Error giving post points", e); }
+
     res.json({
       success: true,
       data: {
@@ -161,6 +169,19 @@ export const reactToPost = async (req: AuthRequest, res: Response) => {
           io,
         });
       }
+
+      // Award points for every 5 likes
+      if (post.likes > 0 && post.likes % 5 === 0 && authorRows.length) {
+         try {
+           const authorId = authorRows[0].author_id;
+           const { rows: userRoleRow } = await client.query(`SELECT role FROM users WHERE id = $1`, [authorId]);
+           if (userRoleRow[0]?.role === "student") {
+              await addPoints(authorId, 1, `Received ${post.likes} likes on a post`);
+           }
+         } catch (e) {
+           console.error("Error giving like points", e);
+         }
+      }
     }
   } catch (err) {
     console.error("reactToPost error:", err);
@@ -188,6 +209,13 @@ export const addComment = async (req: AuthRequest, res: Response) => {
 
     const comment = rows[0];
     res.json({ success: true, data: { ...comment, author: req.user.name, profile_picture: req.user.profile_picture } });
+
+    // Give points for commenting
+    try {
+      if (req.user.role === "student") {
+        await addPoints(req.user.id, 2, "Commented on a community post");
+      }
+    } catch (e) { console.error("Error giving comment points", e); }
 
     // Send Notification to Post Author
     const io = req.app.get("io");
