@@ -1,6 +1,7 @@
 import { Router } from "express";
-import { signup, login, logout, getProfile } from "../controllers/authController";
+import { signup, login, logout, getProfile, updateAccount, changePassword, updatePreferences } from "../controllers/authController";
 import { authenticate } from "../middlewares/authMiddleware";
+import { upload } from "../middlewares/uploadMiddleware";
 import { config } from "../config";
 import { pgPool } from "../config/database";
 import { generateToken } from "../utils/generateToken";
@@ -12,6 +13,9 @@ router.post("/signup", signup);
 router.post("/login", login);
 router.post("/logout", authenticate, logout);
 router.get("/profile", authenticate, getProfile);
+router.put("/update-account", authenticate, upload.single("profilePicture"), updateAccount);
+router.put("/change-password", authenticate, changePassword);
+router.put("/update-preferences", authenticate, updatePreferences);
 
 /* ===== GOOGLE AUTH ===== */
 router.get("/google", (req, res) => {

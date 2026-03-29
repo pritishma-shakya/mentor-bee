@@ -2,18 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "react-hot-toast";
-import { User, Shield, Briefcase, Loader2, Bell, Globe, Sparkles } from "lucide-react";
-import AuthLayout from "../layout";
+import { User, Shield, Settings, Loader2 } from "lucide-react";
+import AuthLayout from "../../layout";
 import AccountSettings from "@/components/settings/AccountSettings";
-import MentorProfileSettings from "@/components/settings/MentorProfileSettings";
 import SecuritySettings from "@/components/settings/SecuritySettings";
 import NotificationSettings from "@/components/settings/NotificationSettings";
 import PreferenceSettings from "@/components/settings/PreferenceSettings";
-import StudentSpecificSettings from "@/components/settings/StudentSpecificSettings";
+import { Bell, Globe, Sparkles } from "lucide-react";
 
-type TabType = "account" | "profile" | "learning" | "security" | "notifications" | "preferences";
+type TabType = "account" | "security" | "system" | "notifications" | "preferences";
 
-export default function SettingsPage() {
+export default function AdminSettingsPage() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>("account");
@@ -30,7 +29,7 @@ export default function SettingsPage() {
         }
       } catch (err) {
         console.error(err);
-        toast.error("Failed to load settings");
+        toast.error("Failed to load admin settings");
       } finally {
         setLoading(false);
       }
@@ -48,19 +47,18 @@ export default function SettingsPage() {
   }
 
   const tabs = [
-    { id: "account", label: "Account Info", icon: User },
-    ...(user?.role === "mentor" ? [{ id: "profile", label: "Professional Profile", icon: Briefcase }] : []),
-    ...(user?.role === "student" ? [{ id: "learning", label: "Learning & Rewards", icon: Sparkles }] : []),
+    { id: "account", label: "Admin Account", icon: User },
     { id: "security", label: "Security", icon: Shield },
     { id: "notifications", label: "Notifications", icon: Bell },
     { id: "preferences", label: "Preferences", icon: Globe },
+    { id: "system", label: "System Config", icon: Settings },
   ];
 
   return (
     <AuthLayout 
       header={{ 
-        title: "Settings", 
-        subtitle: "Manage your account, profile and security preferences", 
+        title: "System Settings", 
+        subtitle: "Manage administrative account and platform configuration", 
         user 
       }}
     >
@@ -89,11 +87,20 @@ export default function SettingsPage() {
         {/* Tab Content */}
         <div className="bg-white rounded-2xl p-8 border border-gray-100 shadow-sm min-h-[500px]">
           {activeTab === "account" && <AccountSettings user={user} onUpdate={(updated: any) => setUser({...user, ...updated})} />}
-          {activeTab === "profile" && user?.role === "mentor" && <MentorProfileSettings user={user} />}
-          {activeTab === "learning" && user?.role === "student" && <StudentSpecificSettings user={user} onUpdate={(updated: any) => setUser({...user, ...updated})} />}
           {activeTab === "security" && <SecuritySettings />}
           {activeTab === "notifications" && <NotificationSettings user={user} onUpdate={(updated: any) => setUser({...user, ...updated})} />}
           {activeTab === "preferences" && <PreferenceSettings user={user} onUpdate={(updated: any) => setUser({...user, ...updated})} />}
+          {activeTab === "system" && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-base font-semibold text-gray-900">System Configuration</h3>
+                <p className="text-sm text-gray-500">Platform-wide settings and management tools.</p>
+              </div>
+              <div className="p-10 border border-dashed border-gray-200 rounded-2xl text-center">
+                <p className="text-sm text-gray-500 italic">Advanced system configuration modules coming soon.</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </AuthLayout>

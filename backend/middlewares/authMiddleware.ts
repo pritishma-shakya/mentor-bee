@@ -13,7 +13,19 @@ export interface AuthRequest extends Request {
     name: string;
     role: "student" | "mentor" | "admin";
     profile_picture?: string;
+    phone_number?: string;
+    bio?: string;
+    language?: string;
+    theme?: string;
+    timezone?: string;
+    email_notifications?: boolean;
+    push_notifications?: boolean;
+    sms_alerts?: boolean;
+    interests?: string[];
+    skill_level?: string;
+    preferred_times?: any;
     status?: "pending" | "accepted" | "rejected" | "suspended";
+    verified_at?: string | null;
   };
 }
 
@@ -43,7 +55,7 @@ export const authenticate = async (
     const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
 
     const { rows: userRows } = await pgPool.query(
-      `SELECT id, email, COALESCE(name,'') AS name, role, profile_picture
+      `SELECT id, email, COALESCE(name,'') AS name, role, profile_picture, phone_number, bio, language, theme, timezone, email_notifications, push_notifications, sms_alerts, interests, skill_level, preferred_times
        FROM users
        WHERE id = $1`,
       [decoded.id]

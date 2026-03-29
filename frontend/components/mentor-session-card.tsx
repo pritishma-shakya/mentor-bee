@@ -14,6 +14,7 @@ import {
     Play
 } from "lucide-react";
 import Link from "next/link";
+import { isSessionActive } from "@/utils/dateUtils";
 
 interface Session {
     id: string;
@@ -49,14 +50,14 @@ interface MentorSessionCardProps {
 }
 
 const formatDate = (date: string | undefined) => {
-  if (!date) return "";
-  try {
-    const d = new Date(date);
-    if (isNaN(d.getTime())) return date; // Return original if invalid
-    return d.toISOString().split('T')[0];
-  } catch (e) {
-    return date;
-  }
+    if (!date) return "";
+    try {
+        const d = new Date(date);
+        if (isNaN(d.getTime())) return date; // Return original if invalid
+        return d.toISOString().split('T')[0];
+    } catch (e) {
+        return date;
+    }
 };
 
 export default function MentorSessionCard({
@@ -110,6 +111,12 @@ export default function MentorSessionCard({
         "Reschedule Requested": "bg-orange-50 text-orange-700 border-orange-200",
     };
 
+    const paymentStatusColors: Record<string, string> = {
+        "Paid": "bg-green-50 text-green-700 border-green-200",
+        "Cash at Venue": "bg-orange-50 text-orange-700 border-orange-200",
+        "Not Paid": "bg-red-50 text-red-700 border-red-200",
+    };
+
     const renderActions = (isExpanded: boolean) => {
         return (
             <div className={`flex flex-wrap gap-2 ${isExpanded ? 'pt-2' : 'mt-4'}`}>
@@ -139,19 +146,26 @@ export default function MentorSessionCard({
 
                 {(["Accepted", "Started", "Reschedule Requested"].includes(session.status)) && (
                     <>
-                        {(session.status === "Accepted" || session.status === "Started") && onStart && (
+                        {(session.status === "Accepted" || session.status === "Started") && onStart && isSessionActive(session.date, session.time) && (
                             <button
                                 onClick={() => onStart(session.id)}
-                                className={`px-6 ${isExpanded ? 'py-2' : 'py-1.5'} bg-orange-600 hover:bg-orange-700 text-white font-semibold rounded-lg ${isExpanded ? 'text-sm' : 'text-xs'} flex items-center justify-center gap-2 transition shadow-sm`}
+                                className={`${isExpanded ? 'px-6 py-2' : 'px-4 py-1.5'} bg-orange-600 hover:bg-orange-700 text-white font-semibold rounded-lg ${isExpanded ? 'text-sm' : 'text-xs'} flex items-center justify-center gap-2 transition shadow-sm`}
                             >
                                 <Play className={`${isExpanded ? 'w-4 h-4' : 'w-3.5 h-3.5'}`} />
                                 Start Session
                             </button>
                         )}
 
+                        {(session.status === "Accepted" || session.status === "Started") && !isSessionActive(session.date, session.time) && (
+                            <div className={`${isExpanded ? 'px-4 py-2 text-sm' : 'px-4 py-1.5 text-[11px]'} bg-gray-100 text-gray-500 font-medium rounded-lg flex items-center gap-2 border border-gray-200`}>
+                                <Clock className="w-3.5 h-3.5" />
+                                Available at {session.time}
+                            </div>
+                        )}
+
                         <Link
                             href={`/messages?studentId=${session.student_id}`}
-                            className={`px-6 ${isExpanded ? 'py-2' : 'py-1.5'} border border-gray-300 rounded-lg font-medium ${isExpanded ? 'text-sm' : 'text-xs'} text-gray-800 flex items-center justify-center gap-2 hover:bg-gray-50 bg-white transition shadow-sm`}
+                            className={`${isExpanded ? 'px-6 py-2' : 'px-4 py-1.5'} border border-gray-300 rounded-lg font-medium ${isExpanded ? 'text-sm' : 'text-xs'} text-gray-800 flex items-center justify-center gap-2 hover:bg-gray-50 bg-white transition shadow-sm`}
                         >
                             <MessageCircle className={`${isExpanded ? 'w-4 h-4' : 'w-3.5 h-3.5'}`} />
                             Message
@@ -161,7 +175,7 @@ export default function MentorSessionCard({
                         {["Accepted", "Pending"].includes(session.status) && (
                             <Link 
                                 href={`/mentor/schedule?rescheduleSessionId=${session.id}&studentName=${session.student_name}`}
-                                className={`px-6 ${isExpanded ? 'py-2' : 'py-1.5'} border border-orange-200 text-orange-600 hover:bg-orange-50 rounded-lg font-medium ${isExpanded ? 'text-sm' : 'text-xs'} flex items-center justify-center gap-2 transition shadow-sm bg-white overflow-hidden`}
+                                className={`${isExpanded ? 'px-6 py-2' : 'px-4 py-1.5'} border border-orange-200 text-orange-600 hover:bg-orange-50 rounded-lg font-medium ${isExpanded ? 'text-sm' : 'text-xs'} flex items-center justify-center gap-2 transition shadow-sm bg-white overflow-hidden`}
                             >
                                 <Calendar className={`${isExpanded ? 'w-4 h-4' : 'w-3.5 h-3.5'}`} />
                                 Reschedule
@@ -175,7 +189,7 @@ export default function MentorSessionCard({
                                     setConfirmType("cancel");
                                     setShowConfirm(true);
                                 }}
-                                className={`px-4 ${isExpanded ? 'py-2' : 'py-1.5'} text-red-600 hover:bg-red-50 rounded-lg font-medium ${isExpanded ? 'text-sm' : 'text-xs'} transition flex items-center gap-2`}
+                                className={`${isExpanded ? 'px-4 py-2 text-sm' : 'px-4 py-1.5 text-xs'} text-red-600 hover:bg-red-50 rounded-lg font-medium transition flex items-center gap-2`}
                             >
                                 <XCircle className={`${isExpanded ? 'w-4 h-4' : 'w-3.5 h-3.5'}`} />
                                 Cancel
@@ -185,7 +199,7 @@ export default function MentorSessionCard({
                         {onComplete && session.status === "Started" && (
                             <button
                                 onClick={() => onComplete(session.id)}
-                                className={`px-4 ${isExpanded ? 'py-2' : 'py-1.5'} text-green-600 hover:bg-green-50 rounded-lg font-medium ${isExpanded ? 'text-sm' : 'text-xs'} transition flex items-center gap-2`}
+                                className={`${isExpanded ? 'px-4 py-2 text-sm' : 'px-4 py-1.5 text-xs'} text-green-600 hover:bg-green-50 rounded-lg font-medium transition flex items-center gap-2`}
                             >
                                 <CheckCircle className={`${isExpanded ? 'w-4 h-4' : 'w-3.5 h-3.5'}`} />
                                 Complete
@@ -217,14 +231,26 @@ export default function MentorSessionCard({
                     </div>
 
                     <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                             <h3 className="text-sm font-semibold text-gray-900">{session.student_name}</h3>
-                            <div className={`px-2 py-0.5 rounded-full text-xs font-medium border ${statusColors[session.status] || ""}`}>
+                            <div className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${statusColors[session.status] || ""}`}>
                                 {session.status}
                             </div>
+                            
+                            {session.payment_status && session.payment_status !== "Not Paid" && (
+                              <div className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${paymentStatusColors[session.payment_status] || "bg-gray-50 text-gray-600 border-gray-200"}`}>
+                                {session.payment_status}
+                              </div>
+                            )}
+
+                            {session.course && (
+                              <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] font-medium rounded-full border border-gray-200">
+                                {session.course}
+                              </span>
+                            )}
                         </div>
 
-                        <div className="flex items-center gap-3 mt-1 text-gray-600 text-xs">
+                        <div className="flex items-center gap-3 mt-1 text-gray-600 text-xs text-nowrap">
                             <span className="flex items-center gap-1">
                                 <Calendar className="w-3.5 h-3.5" />
                                 {new Date(session.date).toLocaleDateString()}
@@ -311,15 +337,13 @@ export default function MentorSessionCard({
                         </div>
                     )}
 
-                    {/* Payment Status */}
                     <div className="flex items-center justify-between pt-2 border-t border-gray-100">
                         <div className="flex items-center gap-2">
-                            <span className="text-gray-500 text-xs">Payment:</span>
-                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                                session.payment_status === "Paid"
+                            <span className="text-gray-500 text-xs text-nowrap">Payment Detail:</span>
+                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${session.payment_status === "Paid"
                                     ? "bg-green-100 text-green-700"
                                     : "bg-gray-100 text-gray-500"
-                            }`}>
+                                }`}>
                                 {session.payment_status === "Paid" ? "✓ Paid" : "Not Paid"}
                             </span>
                             {session.type === "Online" && session.payment_status === "Paid" && (

@@ -10,6 +10,7 @@ interface Admin {
   name: string;
   email: string;
   role: "admin";
+  profile_picture?: string;
 }
 
 interface MentorRequest {
@@ -115,6 +116,7 @@ export default function AdminApprovalsPage() {
       header={{
         title: "Mentor Approvals",
         subtitle: "Approve mentor requests and manage users",
+        user: admin,
       }}
     >
       <Toaster position="top-right" />

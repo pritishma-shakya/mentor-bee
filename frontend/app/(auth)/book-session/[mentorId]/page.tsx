@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import dynamic from "next/dynamic";
 import AuthLayout from "../../layout";
@@ -16,12 +16,16 @@ import {
   Wallet,
   CreditCard,
   Banknote,
+  Tag,
+  Check,
 } from "lucide-react";
+import { getNepalNow, toNepaliDateStr, parseNepalDateTime } from "@/utils/dateUtils";
 
 const SessionMap = dynamic(() => import("../../../../components/session-map"), { ssr: false });
 
 interface Mentor {
   id: string;
+  user_id: string;
   full_name: string;
   profile_picture: string | null;
   hourly_rate: number;
@@ -36,7 +40,9 @@ interface Schedule {
 export default function BookSessionPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const mentorId = params?.mentorId;
+  const promoFromUrl = searchParams.get("promo");
 
   const [mentor, setMentor] = useState<Mentor | null>(null);
   const [loadingMentor, setLoadingMentor] = useState(true);
@@ -58,6 +64,12 @@ export default function BookSessionPage() {
   const [sessionType, setSessionType] = useState<"Online" | "In-Person">("Online");
   const [locationResult, setLocationResult] = useState<{ lat: number; lng: number; address: string } | null>(null);
   const [isLocationConfirmed, setIsLocationConfirmed] = useState(false);
+  
+  // Promo code
+  const [promoCodeInput, setPromoCodeInput] = useState("");
+  const [appliedPromo, setAppliedPromo] = useState<{ id: string; type: string; value: number; description?: string } | null>(null);
+  const [isValidatingPromo, setIsValidatingPromo] = useState(false);
+  const [availablePromos, setAvailablePromos] = useState<any[]>([]);
 
   const timeSlots = [
     "9:00 AM", "10:00 AM", "11:00 AM", "12:00 PM",
@@ -78,9 +90,7 @@ export default function BookSessionPage() {
   };
 
   const toNepaliDate = (dateStr: string) => {
-    const d = new Date(dateStr);
-    const nepali = d.toLocaleString("en-CA", { timeZone: "Asia/Kathmandu" });
-    return nepali.split(",")[0];
+    return toNepaliDateStr(dateStr);
   };
 
   useEffect(() => {
@@ -131,6 +141,20 @@ export default function BookSessionPage() {
     fetchMentor();
   }, [mentorId]);
 
+  // Handle promo code from URL
+  useEffect(() => {
+    if (promoFromUrl) {
+      setPromoCodeInput(promoFromUrl);
+    }
+  }, [promoFromUrl]);
+
+  // Auto-apply promo when mentor is loaded
+  useEffect(() => {
+    if (promoFromUrl && mentor?.user_id && !appliedPromo && !isValidatingPromo) {
+      handleApplyPromo();
+    }
+  }, [promoFromUrl, mentor, appliedPromo, isValidatingPromo]);
+
   // Fetch mentor schedule
   useEffect(() => {
     if (!mentorId) return;
@@ -151,6 +175,23 @@ export default function BookSessionPage() {
     fetchSchedule();
   }, [mentorId]);
 
+  // Fetch active promo codes
+  useEffect(() => {
+    if (!mentorId) return;
+    const fetchPromos = async () => {
+      try {
+        const res = await fetch(`http://localhost:5000/api/promo-codes/mentor/${mentorId}/active`);
+        const data = await res.json();
+        if (data.success) {
+          setAvailablePromos(data.promoCodes);
+        }
+      } catch (err) {
+        console.error("Failed to fetch promos:", err);
+      }
+    };
+    fetchPromos();
+  }, [mentorId]);
+
   // Calendar helpers
   const firstDayOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1).getDay();
   const daysInMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate();
@@ -161,22 +202,8 @@ export default function BookSessionPage() {
   const handleNextMonth = () => setCurrentMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + 1));
 
   const isPastSlot = (date: string, time?: string) => {
-    const now = new Date();
-    // Use Nepal time (UTC+5:45)
-    const nepalNow = new Date(now.getTime() + (5 * 60 + 45) * 60000);
-
-    const targetDate = new Date(date);
-    if (time) {
-      // Parse "9:00 AM" or "1:00 PM"
-      const [hourMin, meridiem] = time.split(" ");
-      let [hour, minute] = hourMin.split(":").map(Number);
-      if (meridiem === "PM" && hour !== 12) hour += 12;
-      if (meridiem === "AM" && hour === 12) hour = 0;
-      targetDate.setHours(hour, minute, 0, 0);
-    } else {
-      targetDate.setHours(23, 59, 59, 999);
-    }
-
+    const nepalNow = getNepalNow();
+    const targetDate = parseNepalDateTime(date, time, !time);
     return targetDate < nepalNow;
   };
 
@@ -192,6 +219,42 @@ export default function BookSessionPage() {
     if (!selectedTime) return toast.error("Please select a time slots");
     if (!course) return toast.error("Please select a course");
     setStep(2);
+  };
+
+  const handleApplyPromo = async () => {
+    if (!promoCodeInput) return;
+    setIsValidatingPromo(true);
+    try {
+      const res = await fetch("http://localhost:5000/api/promo-codes/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: promoCodeInput, mentorId: mentor?.user_id }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setAppliedPromo(data.discount);
+        toast.success("Promo code applied!");
+      } else {
+        toast.error(data.message || "Invalid promo code");
+        setAppliedPromo(null);
+      }
+    } catch (err) {
+      toast.error("Failed to validate promo code");
+    } finally {
+      setIsValidatingPromo(false);
+    }
+  };
+
+  const calculateTotal = () => {
+    if (!mentor) return 0;
+    const base = mentor.hourly_rate;
+    if (!appliedPromo) return base;
+    
+    if (appliedPromo.type === 'percentage') {
+      return Math.max(0, base - (base * appliedPromo.value / 100));
+    } else {
+      return Math.max(0, base - appliedPromo.value);
+    }
   };
 
   const handleFinalSubmit = async () => {
@@ -211,6 +274,8 @@ export default function BookSessionPage() {
         type: sessionType,
         location: locationResult?.address || null,
         payment_status: paymentMethod === "Cash" ? "Cash at Venue" : "Not Paid",
+        promoCodeId: appliedPromo?.id || null,
+        total_amount: calculateTotal().toString(),
       };
 
       if (rescheduleSessionId) {
@@ -231,7 +296,7 @@ export default function BookSessionPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            total_amount: mentor.hourly_rate.toString(),
+            total_amount: calculateTotal().toString(),
             transaction_uuid: transactionId,
             product_code: "EPAYTEST"
           }),
@@ -250,9 +315,9 @@ export default function BookSessionPage() {
         form.style.display = "none";
 
         const fields = {
-          amount: mentor.hourly_rate.toString(),
+          amount: calculateTotal().toString(),
           tax_amount: "0",
-          total_amount: mentor.hourly_rate.toString(),
+          total_amount: calculateTotal().toString(),
           transaction_uuid: transactionId,
           product_code: "EPAYTEST",
           product_service_charge: "0",
@@ -415,8 +480,43 @@ export default function BookSessionPage() {
                 </div>
               </div>
             )}
+            
+            {/* Available Offers */}
+            {availablePromos.length > 0 && !appliedPromo && (
+              <div className="mb-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-1 h-4 bg-orange-500 rounded-full" />
+                  <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider">Available Offers</h3>
+                </div>
+                <div className="flex flex-col gap-2">
+                  {availablePromos.map((promo, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => {
+                        setPromoCodeInput(promo.code);
+                        // Optional: automatically apply? Better to let user click apply to see validation feedback
+                      }}
+                      className="group flex items-start justify-between p-3 bg-orange-50/50 border border-orange-100 rounded-xl hover:bg-orange-50 hover:border-orange-200 transition text-left"
+                    >
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Tag className="w-3 h-3 text-orange-600" />
+                          <span className="text-xs font-black text-gray-900 font-mono tracking-wider group-hover:text-orange-700 transition">{promo.code}</span>
+                        </div>
+                        <p className="text-[10px] text-gray-600 font-medium">
+                          {promo.description || `${promo.discount_type === 'percentage' ? `${promo.discount_value}%` : `Rs. ${promo.discount_value}`} discount on this session!`}
+                        </p>
+                      </div>
+                      <div className="text-[10px] font-bold text-orange-600 bg-white px-2 py-0.5 rounded-full border border-orange-100 mt-1">
+                        {promo.discount_type === 'percentage' ? `-${promo.discount_value}%` : `-Rs.${promo.discount_value}`}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
-            {/* Calendar */}
+            {/* Promo Code Input */}
             <div>
               <label className="block text-sm font-semibold text-gray-900 mb-2 flex items-center gap-1.5">
                 <CalendarIcon className="w-4 h-4 text-gray-500" /> Select Date
@@ -652,15 +752,66 @@ export default function BookSessionPage() {
                 </button>
               )}
             </div>
+            <div className="mb-8">
+               <label className="block text-xs font-bold text-gray-700 uppercase mb-2 ml-1">Promo Code</label>
+               <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input 
+                      type="text" 
+                      value={promoCodeInput}
+                      onChange={(e) => setPromoCodeInput(e.target.value.toUpperCase())}
+                      placeholder="ENTER CODE"
+                      disabled={appliedPromo !== null || isValidatingPromo}
+                      className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 outline-none font-mono tracking-wider text-gray-900 placeholder:text-gray-500"
+                    />
+                    {appliedPromo && (
+                      <Check className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-green-500" />
+                    )}
+                  </div>
+                  <button 
+                    onClick={appliedPromo ? () => { setAppliedPromo(null); setPromoCodeInput(""); } : handleApplyPromo}
+                    disabled={isValidatingPromo || (!appliedPromo && !promoCodeInput)}
+                    className={`px-4 py-2 rounded-lg text-sm font-bold transition ${appliedPromo 
+                      ? "bg-red-50 text-red-600 border border-red-100 hover:bg-red-100" 
+                      : "bg-orange-500 text-white hover:bg-orange-600 shadow-sm disabled:opacity-50"}`}
+                  >
+                    {isValidatingPromo ? "..." : (appliedPromo ? "Remove" : "Apply")}
+                  </button>
+                </div>
+               {appliedPromo && (
+                 <div className="mt-3 p-3 bg-green-50 border border-green-100 rounded-xl animate-in zoom-in-95 duration-300">
+                   <div className="flex items-center gap-2 mb-1">
+                     <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
+                     <span className="text-xs font-bold text-green-900">Code {promoCodeInput} Applied!</span>
+                   </div>
+                   <p className="text-[10px] text-green-700 font-medium leading-relaxed">
+                     {appliedPromo.description || "Discount successfully applied to your total."}
+                   </p>
+                 </div>
+               )}
+            </div>
 
-            <div className="bg-gray-50 rounded-xl p-4 mb-8 flex justify-between items-center border border-gray-100">
-              <div>
-                <p className="text-xs text-gray-500 font-medium">Session Fee</p>
-                <p className="text-lg font-black text-gray-900">Rs. {mentor.hourly_rate}</p>
+            <div className="bg-gray-50 rounded-xl p-4 mb-8 space-y-2 border border-gray-100">
+              <div className="flex justify-between items-center text-xs text-gray-500">
+                <span>Original Price</span>
+                <span className="font-medium">Rs. {mentor.hourly_rate}</span>
               </div>
-              <div className="text-right">
-                <p className="text-xs text-gray-500 font-medium">Payment Method</p>
-                <p className="text-sm font-bold text-orange-600">{paymentMethod === "eSewa" ? "eSewa Online" : "Cash at Venue"}</p>
+              {appliedPromo && (
+                <div className="flex justify-between items-center text-xs text-green-600 font-medium">
+                  <span>Discount</span>
+                  <span>- Rs. {mentor.hourly_rate - calculateTotal()}</span>
+                </div>
+              )}
+              <div className="pt-2 border-t border-gray-200 flex justify-between items-center">
+                <div>
+                  <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Total to Pay</p>
+                  <p className="text-xl font-black text-gray-900">Rs. {calculateTotal()}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Method</p>
+                  <p className="text-sm font-bold text-orange-600">{paymentMethod === "eSewa" ? "eSewa Online" : "Cash at Venue"}</p>
+                </div>
               </div>
             </div>
 

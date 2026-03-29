@@ -238,7 +238,9 @@ export const listMentors = async (_req: AuthRequest, res: Response) => {
   const client = await pgPool.connect();
   try {
     const { rows } = await client.query(
-      `SELECT m.id, u.name, u.email, m.status, m.verified_at, u.created_at
+      `SELECT m.id, u.name, u.email, m.status, m.verified_at, u.created_at,
+              (SELECT AVG(rating) FROM reviews WHERE mentor_id = m.id) as avg_rating,
+              (SELECT COUNT(*) FROM reviews WHERE mentor_id = m.id) as review_count
        FROM mentors m
        JOIN users u ON u.id = m.user_id
        ORDER BY u.created_at DESC`

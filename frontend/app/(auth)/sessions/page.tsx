@@ -9,6 +9,7 @@ import {
 import { toast } from "react-hot-toast";
 import AuthLayout from "../layout";
 import SessionCard from "@/components/session-card";
+import { getNepalNow, toNepaliDateStr, parseNepalDateTime } from "@/utils/dateUtils";
 
 interface User {
   id: string;
@@ -105,29 +106,17 @@ export default function SessionsPage() {
         const sessionsData = await sessionsRes.json();
 
         if (Array.isArray(sessionsData)) {
-          // Identify if a session slot has already passed
-          const isPastSlot = (date: string, time: string) => {
-            const now = new Date();
-            // Optional: approximate Nepal Time context if preferred
-            const nepalNow = new Date(now.getTime() + (5 * 60 + 45) * 60000);
-
-            const targetDate = new Date(date);
-            const [hourMin, meridiem] = time.split(" ");
-            let [hour, minute] = hourMin.split(":").map(Number);
-            if (meridiem === "PM" && hour !== 12) hour += 12;
-            if (meridiem === "AM" && hour === 12) hour = 0;
-            targetDate.setHours(hour, minute, 0, 0);
-
-            return targetDate < nepalNow;
+          const isMissed = (date: string, time: string) => {
+            const nepalNow = getNepalNow();
+            const sessionEnd = parseNepalDateTime(date, time);
+            sessionEnd.setHours(sessionEnd.getHours() + 1); // Assume 1 hour duration
+            return sessionEnd < nepalNow;
           };
 
           const mappedSessions = sessionsData.map((session: Session) => {
-            if (
-              !["Completed", "Started", "Cancelled", "Rejected"].includes(session.status) &&
-              isPastSlot(session.date, session.time)
-            ) {
-              return { ...session, status: "Cancelled" as const };
-            }
+            // Only move to history or missed if it's truly past the session window
+            // For now, let's not force status change to "Cancelled" in the frontend
+            // as it's confusing and potentially incorrect.
             return session;
           });
 
@@ -162,16 +151,20 @@ export default function SessionsPage() {
     }
     if (activeTab === "Upcoming") {
       // Include sessions where user is waiting for approval
+      const nepalNowStr = toNepaliDateStr(new Date());
+      const sessionDateStr = toNepaliDateStr(session.date);
       return (
         ["Accepted", "Started"].includes(session.status) ||
         (session.status === "Cancel Requested" && session.cancel_requested_by === user?.id) ||
         (session.status === "Reschedule Requested" && session.reschedule_requested_by === user?.id)
-      ) && sessionDate >= today;
+      ) && sessionDateStr >= nepalNowStr;
     }
     if (activeTab === "History") {
+      const nepalNowStr = toNepaliDateStr(new Date());
+      const sessionDateStr = toNepaliDateStr(session.date);
       return (
         ["Completed", "Cancelled", "Rejected"].includes(session.status) ||
-        (sessionDate < today && !["Pending", "Accepted", "Started", "Cancel Requested", "Reschedule Requested"].includes(session.status))
+        (sessionDateStr < nepalNowStr && !["Pending", "Accepted", "Started", "Cancel Requested", "Reschedule Requested"].includes(session.status))
       );
     }
     return true;

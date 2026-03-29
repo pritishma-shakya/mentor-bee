@@ -9,8 +9,10 @@ interface User {
   id: string;
   name: string;
   email: string;
-  role: "student" | "mentor";
+  role: "student" | "mentor" | "admin";
+  profile_picture?: string;
   status?: string;
+  avg_rating?: string;
   created_at?: string;
   verified_at?: string;
 }
@@ -64,6 +66,7 @@ export default function AdminUsersPage() {
         <tr className="border-b border-gray-200 text-left text-gray-600">
           <th className="py-3">Name</th>
           <th>Email</th>
+          {isMentor && <th>Rating</th>}
           {isMentor && <th>Status</th>}
           {isMentor && <th>Verified At</th>}
           <th>Joined</th>
@@ -77,6 +80,16 @@ export default function AdminUsersPage() {
               <span className="font-medium text-gray-900">{u.name}</span>
             </td>
             <td className="text-gray-600">{u.email}</td>
+            {isMentor && (
+              <td className="text-gray-500">
+                <div className="flex items-center gap-1">
+                  <span className="font-medium text-gray-900">
+                    {u.avg_rating ? parseFloat(u.avg_rating).toFixed(1) : "0.0"}
+                  </span>
+                  <span className="text-yellow-400">★</span>
+                </div>
+              </td>
+            )}
             {isMentor && <td className="text-gray-500">{u.status || "-"}</td>}
             {isMentor && (
               <td className="text-gray-500">
@@ -97,6 +110,7 @@ export default function AdminUsersPage() {
       header={{
         title: "All Users",
         subtitle: "Manage all students and mentors",
+        user,
       }}
     >
       {/* Tabs */}

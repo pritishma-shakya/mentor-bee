@@ -1,5 +1,6 @@
 import { pgPool } from "../config/database";
 import { createNotification } from "./notificationService";
+import { handleSessionCompletionPoints } from "./rewardsService";
 
 export const startReminderService = () => {
     // Check every 5 minutes
@@ -79,6 +80,40 @@ export const startReminderService = () => {
                 // Check 10 minutes (between 5 and 10 mins)
                 else if (!session.reminder_10m_sent && diffMinutes <= 10 && diffMinutes > 5) {
                     await sendReminder("10 minutes", "reminder_10m_sent");
+                }
+            }
+
+            // --- AUTO-COMPLETE STARTED SESSIONS (AFTER 1 HOUR) ---
+            const { rows: startedSessions } = await pgPool.query(`
+                SELECT s.*, m.user_id as mentor_user_id
+                FROM sessions s
+                JOIN mentors m ON s.mentor_id = m.id
+                WHERE s.status = 'Started' 
+                  AND s.updated_at <= NOW() - INTERVAL '1 hour'
+            `);
+
+            for (const session of startedSessions) {
+                try {
+                    await pgPool.query(`
+                        UPDATE sessions 
+                        SET status = 'Completed', 
+                            updated_at = NOW() 
+                        WHERE id = $1
+                    `, [session.id]);
+
+                    // Emit event to notify any active participants
+                    io.to(`session_${session.id}`).emit("session_completed", session);
+
+                    // Process rewards
+                    try {
+                        await handleSessionCompletionPoints(session.student_id, session.mentor_id);
+                    } catch (rewardError) {
+                        console.error(`Reward processing failed for session ${session.id}:`, rewardError);
+                    }
+
+                    console.log(`Auto-completed session ${session.id} after 1 hour timeout`);
+                } catch (sessionError) {
+                    console.error(`Error auto-completing session ${session.id}:`, sessionError);
                 }
             }
         } catch (error) {

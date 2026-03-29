@@ -14,6 +14,7 @@ interface Mentor {
   rating?: number;
   tags?: string[];
   profile_picture?: string;
+  created_at?: string;
 }
 
 interface UserProps {
@@ -28,6 +29,9 @@ export default function ExplorePage() {
   const [activeTab, setActiveTab] = useState<"mentors" | "courses" | "groups">("mentors");
   const [searchQuery, setSearchQuery] = useState("");
   const [mentors, setMentors] = useState<Mentor[]>([]);
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState("All Categories");
+  const [sortBy, setSortBy] = useState("Recommended");
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<UserProps | null>(null);
 
@@ -41,7 +45,13 @@ export default function ExplorePage() {
         const profileData = await profileRes.json();
 
         if (profileData.success && profileData.user) setUser(profileData.user);
-        else toast.error(profileData.message || "Failed to fetch user info");
+
+        // ---------------- Fetch Expertise Categories ----------------
+        const expertiseRes = await fetch("http://localhost:5000/api/mentors/expertise", {
+          credentials: "include",
+        });
+        const expertiseData = await expertiseRes.json();
+        if (expertiseData.success) setCategories(expertiseData.data);
 
         // ---------------- Fetch mentors ----------------
         const mentorsRes = await fetch("http://localhost:5000/api/mentors", {
@@ -53,7 +63,7 @@ export default function ExplorePage() {
           setMentors(
             mentorsData.data.map((m: Mentor) => ({
               ...m,
-              rating: m.rating || 4.8,
+              rating: m.rating || 0,
               tags: m.expertise.map((e) => e.name),
             }))
           );
@@ -68,6 +78,22 @@ export default function ExplorePage() {
 
     fetchAll();
   }, []);
+
+  const filteredMentors = mentors
+    .filter((m) => {
+      const matchesSearch = m.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          m.expertise.some(e => e.name.toLowerCase().includes(searchQuery.toLowerCase()));
+      const matchesCategory = selectedCategory === "All Categories" || 
+                              m.expertise.some(e => e.name === selectedCategory);
+      return matchesSearch && matchesCategory;
+    })
+    .sort((a, b) => {
+      if (sortBy === "Highest Rated") return (b.rating || 0) - (a.rating || 0);
+      if (sortBy === "Price: Low to High") return parseFloat(a.hourly_rate) - parseFloat(b.hourly_rate);
+      if (sortBy === "Price: High to Low") return parseFloat(b.hourly_rate) - parseFloat(a.hourly_rate);
+      if (sortBy === "Newest First") return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+      return 0;
+    });
 
   // Dummy courses & groups
   const courses = [
@@ -119,20 +145,26 @@ export default function ExplorePage() {
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-4 mt-4">
         <div className="relative">
-          <select className="appearance-none px-5 py-3 pr-12 bg-white border border-gray-300 rounded-xl text-gray-800 font-medium text-sm shadow-sm hover:border-gray-400 focus:border-orange-400 focus:outline-none transition cursor-pointer">
+          <select 
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            className="appearance-none px-5 py-3 pr-12 bg-white border border-gray-300 rounded-xl text-gray-800 font-medium text-sm shadow-sm hover:border-gray-400 focus:border-orange-400 focus:outline-none transition cursor-pointer"
+          >
             <option>All Categories</option>
-            <option>Web Development</option>
-            <option>Data Science</option>
-            <option>Design</option>
-            <option>Cloud & DevOps</option>
-            <option>Career Coaching</option>
+            {categories.map((cat) => (
+              <option key={cat.id} value={cat.name}>{cat.name}</option>
+            ))}
           </select>
           <div className="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none">
             <ChevronDown className="w-5 h-5 text-gray-500" />
           </div>
         </div>
         <div className="relative">
-          <select className="appearance-none px-5 py-3 pr-12 bg-white border border-gray-300 rounded-xl text-gray-800 font-medium text-sm shadow-sm hover:border-gray-400 focus:border-orange-400 focus:outline-none transition cursor-pointer">
+          <select 
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="appearance-none px-5 py-3 pr-12 bg-white border border-gray-300 rounded-xl text-gray-800 font-medium text-sm shadow-sm hover:border-gray-400 focus:border-orange-400 focus:outline-none transition cursor-pointer"
+          >
             <option>Sort by: Recommended</option>
             <option>Highest Rated</option>
             <option>Price: Low to High</option>
@@ -148,21 +180,28 @@ export default function ExplorePage() {
       {/* Content Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mt-6">
         {/* Mentors Tab */}
-        {activeTab === "mentors" &&
-          mentors.map((m) => (
-            <MentorCard
-              key={m.id}
-              mentor={{
-                id: m.id,
-                name: m.full_name,
-                expertise: m.expertise.map((e) => e.name).join(", "),
-                profile_picture: m.profile_picture,
-                rating: m.rating || 4.8,
-                tags: m.tags || [],
-                price: parseFloat(m.hourly_rate),
-              }}
-            />
-          ))}
+        {activeTab === "mentors" && (
+          filteredMentors.length > 0 ? (
+            filteredMentors.map((m) => (
+              <MentorCard
+                key={m.id}
+                mentor={{
+                  id: m.id,
+                  name: m.full_name,
+                  expertise: m.expertise.map((e) => e.name).join(", "),
+                  profile_picture: m.profile_picture,
+                  rating: m.rating || 0,
+                  tags: m.tags || [],
+                  price: parseFloat(m.hourly_rate),
+                }}
+              />
+            ))
+          ) : (
+            <div className="col-span-full py-20 text-center text-gray-500">
+               No mentors found matching your criteria.
+            </div>
+          )
+        )}
 
         {/* Courses Tab */}
         {activeTab === "courses" &&

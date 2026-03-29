@@ -40,7 +40,7 @@ export default function HeaderBar({ user, title, subtitle, showSearch, searchQue
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-9 pr-3 py-2 w-full md:w-80 bg-white rounded-full shadow-sm border border-gray-200 
-                         focus:border-orange-400 focus:outline-none text-sm placeholder-gray-500"
+                         focus:border-orange-400 focus:outline-none text-sm placeholder-gray-500 text-gray-900"
             />
           </div>
         )}

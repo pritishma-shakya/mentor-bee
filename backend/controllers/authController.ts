@@ -4,6 +4,7 @@ import { pgPool } from "../config/database";
 import { generateToken } from "../utils/generateToken";
 import { AuthRequest } from "../middlewares/authMiddleware";
 import { createNotification, getAdminUserId } from "../utils/notificationService";
+import { uploadToCloudinary } from "../utils/cloudinaryUpload";
 import { addPoints, handleLoginPoints } from "../utils/rewardsService";
 
 export type UserRole = "student" | "mentor" | "admin";
@@ -102,7 +103,7 @@ export const login = async (req: AuthRequest, res: Response) => {
 
   try {
     const { rows } = await pgPool.query(
-      "SELECT id, email, name, password, role FROM users WHERE email = $1",
+      "SELECT id, email, name, password, role, profile_picture, phone_number, bio, language, theme, timezone, email_notifications, push_notifications, sms_alerts, interests, skill_level, preferred_times FROM users WHERE email = $1",
       [email.trim()]
     );
 
@@ -117,6 +118,7 @@ export const login = async (req: AuthRequest, res: Response) => {
     // clear old cookies
     res.clearCookie("student_auth_token", clearCookieOptions);
     res.clearCookie("mentor_auth_token", clearCookieOptions);
+    res.clearCookie("admin_auth_token", clearCookieOptions); // Clear admin cookie too
 
     // set new cookie based on role
     if (user.role === "student") {
@@ -130,7 +132,24 @@ export const login = async (req: AuthRequest, res: Response) => {
 
     res.json({
       success: true,
-      user: { id: user.id, email: user.email, name: user.name, role: user.role },
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        profile_picture: user.profile_picture,
+        phone_number: user.phone_number,
+        bio: user.bio,
+        language: user.language,
+        theme: user.theme,
+        timezone: user.timezone,
+        email_notifications: user.email_notifications,
+        push_notifications: user.push_notifications,
+        sms_alerts: user.sms_alerts,
+        interests: user.interests,
+        skill_level: user.skill_level,
+        preferred_times: user.preferred_times,
+      },
     });
   } catch (err) {
     console.error("Login error:", err);
@@ -154,4 +173,143 @@ export const getProfile = (req: AuthRequest, res: Response) => {
     success: true,
     user: req.user,
   });
+};
+
+/* ================= UPDATE ACCOUNT ================= */
+export const updateAccount = async (req: AuthRequest, res: Response) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+
+  const { name, phone_number, bio } = req.body;
+  let profilePicture: string | undefined;
+
+  if (req.file) {
+    try {
+      const result = await uploadToCloudinary(req.file);
+      profilePicture = result.secure_url;
+    } catch (err) {
+      console.error("Cloudinary upload failed:", err);
+      return res.status(500).json({ success: false, message: "Failed to upload image to cloud" });
+    }
+  }
+
+  const client = await pgPool.connect();
+  try {
+    const { rows } = await client.query(
+      `UPDATE users 
+       SET name = COALESCE($1, name), 
+           profile_picture = COALESCE($2, profile_picture), 
+           phone_number = COALESCE($3, phone_number), 
+           bio = COALESCE($4, bio), 
+           updated_at = NOW() 
+       WHERE id = $5 
+       RETURNING id, name, email, role, profile_picture, phone_number, bio`,
+      [name, profilePicture, phone_number, bio, userId]
+    );
+    
+    res.json({ success: true, message: "Account updated successfully", user: rows[0] });
+  } catch (err) {
+    console.error("updateAccount error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  } finally {
+    client.release();
+  }
+};
+
+// =====================
+// Update user preferences
+// =====================
+export const updatePreferences = async (req: AuthRequest, res: Response) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+
+  const {
+    language,
+    theme,
+    timezone,
+    email_notifications,
+    push_notifications,
+    sms_alerts,
+    interests,
+    skill_level,
+    preferred_times
+  } = req.body;
+
+  const client = await pgPool.connect();
+  try {
+    const { rows } = await client.query(
+      `UPDATE users 
+       SET language = COALESCE($1, language),
+           theme = COALESCE($2, theme),
+           timezone = COALESCE($3, timezone),
+           email_notifications = COALESCE($4, email_notifications),
+           push_notifications = COALESCE($5, push_notifications),
+           sms_alerts = COALESCE($6, sms_alerts),
+           interests = COALESCE($7, interests),
+           skill_level = COALESCE($8, skill_level),
+           preferred_times = COALESCE($9, preferred_times),
+           updated_at = NOW()
+       WHERE id = $10
+       RETURNING *`,
+      [
+        language,
+        theme,
+        timezone,
+        email_notifications,
+        push_notifications,
+        sms_alerts,
+        interests,
+        skill_level,
+        preferred_times,
+        userId
+      ]
+    );
+
+    res.json({
+      success: true,
+      message: "Preferences updated successfully",
+      user: rows[0]
+    });
+  } catch (err) {
+    console.error("updatePreferences error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  } finally {
+    client.release();
+  }
+};
+
+/* ================= CHANGE PASSWORD ================= */
+export const changePassword = async (req: AuthRequest, res: Response) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+
+  const { currentPassword, newPassword } = req.body;
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ success: false, message: "Both current and new passwords are required" });
+  }
+
+  const client = await pgPool.connect();
+  try {
+    const { rows } = await client.query("SELECT password FROM users WHERE id = $1", [userId]);
+    const user = rows[0];
+
+    if (!user || !user.password) {
+      return res.status(400).json({ success: false, message: "Password not set for this account (Social login?)" });
+    }
+
+    const valid = await bcrypt.compare(currentPassword, user.password);
+    if (!valid) {
+      return res.status(401).json({ success: false, message: "Incorrect current password" });
+    }
+
+    const hashedNewPassword = await bcrypt.hash(newPassword, 12);
+    await client.query("UPDATE users SET password = $1 WHERE id = $2", [hashedNewPassword, userId]);
+
+    res.json({ success: true, message: "Password updated successfully" });
+  } catch (err) {
+    console.error("changePassword error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  } finally {
+    client.release();
+  }
 };

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { use } from "react"; // ← This is required in Next.js 15+
-import { Globe, Clock, DollarSign, Briefcase, Users, Mail, Calendar } from "lucide-react";
+import { Globe, Clock, DollarSign, Briefcase, Users, Mail, Calendar, Star, Tag, ChevronRight } from "lucide-react";
 import toast from "react-hot-toast";
 import AuthLayout from "../../layout"; // adjust path
 import Link from "next/link";
@@ -10,6 +10,23 @@ import Link from "next/link";
 interface Expertise {
   id: string;
   name: string;
+}
+
+interface Review {
+  id: string;
+  student_name: string;
+  student_picture?: string;
+  rating: number;
+  comment: string;
+  created_at: string;
+}
+
+interface PromoCode {
+  code: string;
+  discount_type: string;
+  discount_value: number;
+  expiry_date: string | null;
+  description: string | null;
 }
 
 interface Mentor {
@@ -26,6 +43,8 @@ interface Mentor {
   created_at: string;
   expertise: Expertise[];
   status: string;
+  rating: string;
+  review_count: number;
 }
 
 interface User {
@@ -42,8 +61,11 @@ export default function MentorProfilePage({ params }: { params: Promise<{ id: st
   const mentorId = resolvedParams.id;
 
   const [mentor, setMentor] = useState<Mentor | null>(null);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [promoCodes, setPromoCodes] = useState<PromoCode[]>([]);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<"About" | "Reviews" | "Offers">("About");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -83,6 +105,24 @@ export default function MentorProfilePage({ params }: { params: Promise<{ id: st
           setMentor(mentorData.data);
         } else {
           throw new Error(mentorData.message || "Mentor not found");
+        }
+
+        // Fetch reviews
+        const reviewsRes = await fetch(`http://localhost:5000/api/reviews/mentor/${mentorId}`, {
+          credentials: "include",
+        });
+        const reviewsData = await reviewsRes.json();
+        if (reviewsData.success) {
+          setReviews(reviewsData.data);
+        }
+
+        // Fetch promo codes
+        const promosRes = await fetch(`http://localhost:5000/api/promo-codes/mentor/${mentorId}/active`);
+        if (promosRes.ok) {
+          const promosData = await promosRes.json();
+          if (promosData.success) {
+            setPromoCodes(promosData.promoCodes);
+          }
         }
       } catch (err: any) {
         console.error("Fetch error:", err);
@@ -166,43 +206,171 @@ export default function MentorProfilePage({ params }: { params: Promise<{ id: st
                   <span>Replies in {mentor.response_time}</span>
                 </div>
               )}
+
+              <div className="flex items-center gap-1.5 text-gray-800">
+                <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+                <span className="font-bold">{mentor.rating}</span>
+                <span className="text-gray-500">({mentor.review_count} reviews)</span>
+              </div>
             </div>
           </div>
-        </div>
-
-        {/* Main Content */}
+        </div>        {/* Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
-          <div className="lg:col-span-2 space-y-8">
-            <section className="bg-white rounded-lg p-4 shadow border border-gray-100">
-              <h2 className="text-base font-semibold text-gray-900 mb-3">
-                About {mentor.full_name.split(" ")[0]}
-              </h2>
-              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
-                {mentor.bio || "No detailed bio provided yet."}
-              </p>
-            </section>
-
-            <section className="bg-white rounded-lg p-4 shadow border border-gray-100">
-              <h3 className="text-base font-semibold text-gray-900 mb-3">
-                Areas of Expertise
-              </h3>
-              <div className="flex flex-wrap gap-2">
-                {mentor.expertise?.length > 0 ? (
-                  mentor.expertise.map((exp) => (
-                    <span
-                      key={exp.id}
-                      className="px-3 py-1 bg-orange-50 text-orange-800 text-xs font-medium rounded-full border border-orange-200"
-                    >
-                      {exp.name}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Tabs - Mirrored from Sessions/Bookings page */}
+            <div className="flex gap-8 border-b border-gray-200 mb-6 overflow-x-auto">
+              {["About", "Reviews", "Offers"].map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab as any)}
+                  className={`pb-3 text-sm font-medium relative transition-colors whitespace-nowrap flex items-center ${
+                    activeTab === tab
+                      ? "text-orange-600 font-semibold"
+                      : "text-gray-500 hover:text-gray-800"
+                  }`}
+                >
+                  {tab}
+                  {tab === "Reviews" && reviews.length > 0 && (
+                    <span className="ml-2 px-1.5 py-0.5 text-[10px] bg-gray-100 text-gray-600 rounded-full min-w-[18px] text-center font-bold">
+                      {reviews.length}
                     </span>
-                  ))
+                  )}
+                  {tab === "Offers" && promoCodes.length > 0 && (
+                    <span className="ml-2 px-1.5 py-0.5 text-[10px] bg-orange-100 text-orange-600 rounded-full min-w-[18px] text-center font-bold">
+                      {promoCodes.length}
+                    </span>
+                  )}
+                  {activeTab === tab && (
+                    <span className="absolute bottom-0 left-0 w-full h-0.5 bg-orange-600 rounded-full" />
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {activeTab === "About" && (
+              <div className="space-y-6 animate-in fade-in duration-300">
+                <section className="bg-white rounded-lg p-5 shadow-sm border border-gray-100">
+                  <h2 className="text-base font-bold text-gray-900 mb-3">
+                    About {mentor.full_name.split(" ")[0]}
+                  </h2>
+                  <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+                    {mentor.bio || "No detailed bio provided yet."}
+                  </p>
+                </section>
+
+                <section className="bg-white rounded-lg p-5 shadow-sm border border-gray-100">
+                  <h3 className="text-base font-bold text-gray-900 mb-3">
+                    Areas of Expertise
+                  </h3>
+                  <div className="flex flex-wrap gap-2">
+                    {mentor.expertise?.length > 0 ? (
+                      mentor.expertise.map((exp) => (
+                        <span
+                          key={exp.id}
+                          className="px-3 py-1 bg-orange-50 text-orange-800 text-[11px] font-bold rounded-full border border-orange-100"
+                        >
+                          {exp.name}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-sm text-gray-500 italic">
+                        No expertise areas listed yet
+                      </span>
+                    )}
+                  </div>
+                </section>
+              </div>
+            )}
+
+            {activeTab === "Offers" && (
+              <div className="space-y-4 animate-in fade-in duration-300">
+                {promoCodes.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {promoCodes.map((promo, idx) => (
+                      <div key={idx} className="p-4 bg-gradient-to-br from-orange-50/50 to-white border border-orange-100 rounded-2xl relative overflow-hidden group hover:shadow-sm transition-all">
+                        <div className="absolute top-0 right-0 w-16 h-16 bg-orange-100/20 rounded-bl-full transform translate-x-4 -translate-y-4" />
+                        <div className="flex justify-between items-start mb-3 relative">
+                          <span className="px-2.5 py-1 bg-white border border-orange-200 rounded-lg text-[10px] font-black font-mono tracking-widest text-orange-700 uppercase">{promo.code}</span>
+                          <span className="text-sm font-black text-gray-900 bg-orange-100 px-2 py-0.5 rounded-full">{promo.discount_type === 'percentage' ? `${promo.discount_value}% OFF` : `Rs. ${promo.discount_value} OFF`}</span>
+                        </div>
+                        <p className="text-[11px] text-gray-600 font-bold leading-relaxed relative mb-4">
+                          {promo.description || `Get a discount on your session with ${mentor.full_name}!`}
+                        </p>
+                        <Link href={`/book-session/${mentor.id}?promo=${promo.code}`} className="block relative">
+                          <button className="w-full py-2 bg-gray-900 text-white rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-black transition flex items-center justify-center gap-2 group-hover:scale-[1.01]">
+                            Redeem Now
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </button>
+                        </Link>
+                      </div>
+                    ))}
+                  </div>
                 ) : (
-                  <span className="text-sm text-gray-500 italic">
-                    No expertise areas listed yet
-                  </span>
+                  <div className="text-center py-16 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-100">
+                    <Tag className="w-12 h-12 text-gray-200 mx-auto mb-4" />
+                    <p className="text-gray-500 font-bold">No active offers available right now.</p>
+                  </div>
                 )}
               </div>
-            </section>
+            )}
+
+            {activeTab === "Reviews" && (
+              <div className="space-y-4 animate-in fade-in duration-300">
+                <section className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
+                  <h3 className="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2">
+                    Student Reviews
+                    <span className="text-sm font-normal text-gray-500">({reviews.length})</span>
+                  </h3>
+
+                  {reviews.length > 0 ? (
+                    <div className="space-y-6">
+                      {reviews.map((review) => (
+                        <div key={review.id} className="border-b border-gray-100 last:border-0 pb-6 last:pb-0">
+                          <div className="flex items-start gap-4 mb-3">
+                            <div className="w-10 h-10 rounded-xl bg-orange-50 overflow-hidden flex-shrink-0 border border-orange-100">
+                              {review.student_picture ? (
+                                <img 
+                                  src={review.student_picture.startsWith('http') ? review.student_picture : `http://localhost:5000${review.student_picture}`} 
+                                  alt={review.student_name}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-orange-600 font-bold text-sm">
+                                  {review.student_name[0].toUpperCase()}
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center justify-between mb-1">
+                                <h4 className="font-bold text-gray-900 text-sm">{review.student_name}</h4>
+                                <span className="text-[10px] text-gray-400 font-bold">
+                                  {new Date(review.created_at).toLocaleDateString()}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-0.5">
+                                {[1, 2, 3, 4, 5].map((s) => (
+                                  <Star 
+                                    key={s} 
+                                    className={`w-3 h-3 ${s <= review.rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-200'}`} 
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                          <p className="text-sm text-gray-600 leading-relaxed italic bg-gray-50 p-4 rounded-xl">
+                            "{review.comment || "No comment provided."}"
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-10 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                      <p className="text-gray-500 text-sm font-medium">No reviews yet for this mentor.</p>
+                    </div>
+                  )}
+                </section>
+              </div>
+            )}
           </div>
 
           <div className="space-y-6 lg:sticky lg:top-6 h-fit">

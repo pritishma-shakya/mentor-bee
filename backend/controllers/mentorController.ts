@@ -134,7 +134,19 @@ export const updateMentorProfile = async (req: AuthRequest, res: Response) => {
     return res.status(403).json({ success: false, message: "Forbidden" });
   }
 
-  const { bio, experience, location, hourlyRate, responseTime, expertiseIds } = req.body;
+  const { 
+    bio, 
+    experience, 
+    location, 
+    hourlyRate, 
+    responseTime, 
+    expertiseIds,
+    linkedin_url,
+    portfolio_url,
+    certifications,
+    auto_accept,
+    buffer_time
+  } = req.body;
 
   const client = await pgPool.connect();
   try {
@@ -147,10 +159,27 @@ export const updateMentorProfile = async (req: AuthRequest, res: Response) => {
            location = $3,
            hourly_rate = $4,
            response_time = $5,
+           linkedin_url = $6,
+           portfolio_url = $7,
+           certifications = $8,
+           auto_accept = $9,
+           buffer_time = $10,
            updated_at = NOW()
-       WHERE user_id = $6
+       WHERE user_id = $11
        RETURNING id`,
-      [bio, experience, location, hourlyRate || null, responseTime || null, req.user.id]
+      [
+        bio, 
+        experience, 
+        location, 
+        hourlyRate || null, 
+        responseTime || null,
+        linkedin_url,
+        portfolio_url,
+        certifications,
+        auto_accept,
+        buffer_time,
+        req.user.id
+      ]
     );
 
     const mentor = rows[0];
@@ -203,7 +232,17 @@ export const getMentorProfile = async (req: AuthRequest, res: Response) => {
          m.created_at,
          u.name AS full_name,
          u.email,
-         u.profile_picture
+         u.profile_picture,
+         u.phone_number,
+         u.bio as user_bio,
+         u.language,
+         u.theme,
+         u.timezone,
+         m.linkedin_url,
+         m.portfolio_url,
+         m.certifications,
+         m.auto_accept,
+         m.buffer_time
        FROM mentors m
        JOIN users u ON m.user_id = u.id
        WHERE m.id = $1`,
@@ -215,6 +254,17 @@ export const getMentorProfile = async (req: AuthRequest, res: Response) => {
     }
 
     const mentor = rows[0];
+
+    // Fetch average rating and review count
+    const { rows: ratingRows } = await client.query(
+      `SELECT AVG(rating) as avg_rating, COUNT(*) as review_count 
+       FROM reviews 
+       WHERE mentor_id = $1`,
+      [mentorId]
+    );
+
+    mentor.rating = ratingRows[0].avg_rating ? parseFloat(parseFloat(ratingRows[0].avg_rating).toFixed(1)) : 0;
+    mentor.review_count = parseInt(ratingRows[0].review_count);
 
     // Fetch expertise
     const { rows: expertiseRows } = await client.query(
@@ -268,6 +318,23 @@ export const listMentors = async (_req: AuthRequest, res: Response) => {
 
     const mentorIds = mentors.map((m) => m.id);
 
+    // Fetch ratings for all mentors in this list
+    const { rows: ratingRows } = await client.query(
+       `SELECT mentor_id, AVG(rating) as avg_rating, COUNT(*) as review_count 
+        FROM reviews 
+        WHERE mentor_id = ANY($1::uuid[])
+        GROUP BY mentor_id`,
+       [mentorIds]
+    );
+
+    const ratingMap: Record<string, { rating: number, count: number }> = {};
+    ratingRows.forEach(r => {
+       ratingMap[r.mentor_id] = {
+           rating: parseFloat(parseFloat(r.avg_rating).toFixed(1)),
+           count: parseInt(r.review_count)
+       };
+    });
+
     const { rows: expertiseRows } = await client.query(
       `SELECT me.mentor_id, e.id AS expertise_id, e.name
        FROM mentor_expertise me
@@ -286,6 +353,8 @@ export const listMentors = async (_req: AuthRequest, res: Response) => {
 
     const result = mentors.map((m) => ({
       ...m,
+      rating: ratingMap[m.id]?.rating || 0,
+      review_count: ratingMap[m.id]?.count || 0,
       expertise: expertiseMap[m.id] || [],
     }));
 
@@ -387,7 +456,7 @@ export const getMentorDashboardStats = async (req: AuthRequest, res: Response) =
     const mentorId = mentorRows[0].id;
 
     // Total sessions
-    const { rows: sessionCountRows } = await client.query(
+    const { rows: countRows } = await client.query(
       `SELECT COUNT(*) as total FROM sessions WHERE mentor_id = $1`,
       [mentorId]
     );
@@ -413,13 +482,56 @@ export const getMentorDashboardStats = async (req: AuthRequest, res: Response) =
     res.json({
       success: true,
       data: {
-        totalSessions: parseInt(sessionCountRows[0].total),
+        totalSessions: parseInt(countRows[0].total),
         totalStudents: parseInt(studentCountRows[0].total),
         recentSessions,
       },
     });
   } catch (err) {
     console.error("getMentorDashboardStats error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  } finally {
+    client.release();
+  }
+};
+
+// =====================
+// Get list of unique students for the mentor
+// =====================
+export const getMentorStudents = async (req: AuthRequest, res: Response) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+
+  const client = await pgPool.connect();
+  try {
+    const { rows: mentorRows } = await client.query(
+      `SELECT id FROM mentors WHERE user_id = $1`,
+      [userId]
+    );
+    if (!mentorRows.length) {
+      return res.status(404).json({ success: false, message: "Mentor not found" });
+    }
+    const mentorId = mentorRows[0].id;
+
+    const { rows: students } = await client.query(
+      `SELECT 
+         u.id, 
+         u.name, 
+         u.email, 
+         u.profile_picture,
+         COUNT(s.id) as total_sessions,
+         MAX(s.date) as last_session_date
+       FROM sessions s
+       JOIN users u ON s.student_id = u.id
+       WHERE s.mentor_id = $1
+       GROUP BY u.id, u.name, u.email, u.profile_picture
+       ORDER BY last_session_date DESC`,
+      [mentorId]
+    );
+
+    res.json({ success: true, data: students });
+  } catch (err) {
+    console.error("getMentorStudents error:", err);
     res.status(500).json({ success: false, message: "Internal server error" });
   } finally {
     client.release();

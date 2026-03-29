@@ -15,6 +15,7 @@ import {
   DollarSign,
   BarChart3,
   Shield,
+  Tag,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import toast from "react-hot-toast";
@@ -81,13 +82,13 @@ export default function Sidebar() {
 
   const mentorNav: NavItem[] = [
     { icon: Home, label: "Dashboard", path: "/mentor/dashboard" },
-    { icon: Calendar, label: "Manage Schedule", path: "/mentor/schedule" },
-    { icon: Calendar, label: "Manage Bookings", path: "/mentor/bookings" },
+    { icon: Calendar, label: "Manage Sessions", path: "/mentor/bookings" },
     { icon: MessageCircle, label: "Messages", path: "/messages" },
     { icon: UserCheck, label: "My Students", path: "/mentor/students" },
     { icon: Users, label: "My Community", path: "/community" },
     { icon: DollarSign, label: "Earnings", path: "/mentor/earnings" },
     { icon: Trophy, label: "Ratings & Reviews", path: "/mentor/reviews" },
+    { icon: Tag, label: "Promo Codes", path: "/mentor/promo-codes" },
     { icon: Settings, label: "Settings", path: "/settings" },
   ];
 
@@ -98,6 +99,7 @@ export default function Sidebar() {
     { icon: Calendar, label: "All Sessions", path: "/admin/sessions" },
     { icon: DollarSign, label: "Revenue", path: "/admin/revenue" },
     { icon: Shield, label: "Manage Points", path: "/admin/manage-points" },
+    { icon: Tag, label: "Promo Codes", path: "/admin/promo-codes" },
     { icon: Settings, label: "System Settings", path: "/admin/settings" },
   ];
 

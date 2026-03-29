@@ -14,7 +14,10 @@ const formatDate = (date: any) => {
 // Create a new session (student books a session)
 export const bookSession = async (req: AuthRequest, res: Response) => {
   const studentId = req.user?.id;
-  const { mentor_id, date, time, course, notes, type, location, payment_status, transaction_uuid, total_amount } = req.body;
+  const { 
+    mentor_id, date, time, course, notes, type, location, 
+    payment_status, transaction_uuid, total_amount, promoCodeId 
+  } = req.body;
 
   if (!studentId) return res.status(401).json({ message: "Unauthorized" });
   if (!mentor_id || !date || !time || !course)
@@ -36,23 +39,41 @@ export const bookSession = async (req: AuthRequest, res: Response) => {
 
     const newSession = sessionRows[0];
     
-    // 2. Insert payment record if Paid
+    // 2. Handle Price and Discount
+    const { rows: mentorInfo } = await client.query(`SELECT hourly_rate FROM mentors WHERE id = $1`, [mentor_id]);
+    const baseAmount = mentorInfo[0]?.hourly_rate || 0;
+    let amountToCharge = total_amount || baseAmount;
+    let discountAmount = 0;
+
+    if (promoCodeId) {
+        const { rows: promoRows } = await client.query(
+            "SELECT * FROM promo_codes WHERE id = $1 AND status = 'approved' AND is_active = true",
+            [promoCodeId]
+        );
+        const promo = promoRows[0];
+        if (promo) {
+            if (promo.discount_type === 'percentage') {
+                discountAmount = (baseAmount * Number(promo.discount_value)) / 100;
+            } else {
+                discountAmount = Number(promo.discount_value);
+            }
+            amountToCharge = Math.max(0, baseAmount - discountAmount);
+
+            // Increment usage count
+            await client.query("UPDATE promo_codes SET usage_count = usage_count + 1 WHERE id = $1", [promoCodeId]);
+        }
+    }
+    
+    // 3. Insert payment record if Paid
     if (payment_status === "Paid") {
-      // Handle the case where total_amount might not be passed explicitly
-      let amountToCharge = total_amount;
-      if (!amountToCharge) {
-         const { rows: mentorInfo } = await client.query(`SELECT hourly_rate FROM mentors WHERE id = $1`, [mentor_id]);
-         amountToCharge = mentorInfo[0]?.hourly_rate || 0;
-      }
-      
       const adminRev = amountToCharge * 0.20;
       const mentorRev = amountToCharge * 0.80;
       
       await client.query(
         `INSERT INTO payments 
-         (session_id, student_id, mentor_id, transaction_uuid, total_amount, admin_revenue, mentor_revenue)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [newSession.id, studentId, mentor_id, transaction_uuid || null, amountToCharge, adminRev, mentorRev]
+         (session_id, student_id, mentor_id, transaction_uuid, total_amount, admin_revenue, mentor_revenue, promo_code_id, discount_amount)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [newSession.id, studentId, mentor_id, transaction_uuid || null, amountToCharge, adminRev, mentorRev, promoCodeId || null, discountAmount]
       );
     }
     
@@ -145,10 +166,12 @@ export const getStudentSessions = async (req: AuthRequest, res: Response) => {
 
   try {
     const { rows } = await pgPool.query(
-      `SELECT s.*, u.name AS mentor_name, u.profile_picture AS mentor_profile_picture, u.id AS mentor_user_id
+      `SELECT s.*, u.name AS mentor_name, u.profile_picture AS mentor_profile_picture, u.id AS mentor_user_id,
+              CASE WHEN r.id IS NOT NULL THEN true ELSE false END as has_review
        FROM sessions s
        JOIN mentors m ON m.id = s.mentor_id
        JOIN users u ON m.user_id = u.id
+       LEFT JOIN reviews r ON r.session_id = s.id
        WHERE s.student_id = $1
        ORDER BY s.date ASC, s.time ASC`,
       [studentId]

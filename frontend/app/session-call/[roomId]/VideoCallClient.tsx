@@ -72,32 +72,13 @@ export default function VideoCallClient({ roomId, user }: { roomId: string, user
                     },
                     showPreJoinView: true,
                     onLeaveRoom: async () => {
-                        // If mentor leaves, mark the session as completed
-                        if (user.role === 'mentor' && !apiCalledRef.current) {
-                            apiCalledRef.current = true;
-                            // Add a local notification for the mentor
-                            toast.success("Session ended successfully!");
-                            
-                            try {
-                                await fetch(`http://localhost:5000/api/sessions/${roomId}/status`, {
-                                    method: 'PATCH',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    credentials: 'include',
-                                    body: JSON.stringify({ status: 'Completed' })
-                                });
-                            } catch (e) {
-                                console.error("Failed to update status on leave:", e);
-                            }
-                            
-                            // Give some time for the success toast and for the student to receive the signal
-                            await new Promise(resolve => setTimeout(resolve, 2000));
-                        } else {
-                            // Student or mentor already redirected by socket
-                            toast.success("Leaving call...");
-                            await new Promise(resolve => setTimeout(resolve, 1000));
-                        }
+                        // Notify the user they are leaving
+                        toast.success("Leaving call...");
+                        
+                        // Small delay for the toast
+                        await new Promise(resolve => setTimeout(resolve, 1000));
 
-                        // Redirection
+                        // Redirection back to dashboard/sessions
                         if (user.role === 'mentor') {
                             window.location.href = '/mentor/bookings';
                         } else {

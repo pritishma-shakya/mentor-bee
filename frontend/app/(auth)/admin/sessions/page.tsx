@@ -36,8 +36,16 @@ export default function AdminSessionsPage() {
   const [sessions, setSessions] = useState<AdminSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState("All");
+  const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
+    fetch("http://localhost:5000/api/auth/profile", { credentials: "include" })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) setUser(data.user);
+      })
+      .catch(err => console.error(err));
+
     const fetchSessions = async () => {
       try {
         const res = await fetch("http://localhost:5000/api/admin/sessions", { credentials: "include" });
@@ -69,7 +77,7 @@ export default function AdminSessionsPage() {
   };
 
   return (
-    <AuthLayout header={{ title: "All Sessions", subtitle: "Monitor all platform sessions" }}>
+    <AuthLayout header={{ title: "All Sessions", subtitle: "Monitor all platform sessions", user }}>
       <div className="space-y-4">
         {/* Stats */}
         <div className="grid grid-cols-4 gap-2">

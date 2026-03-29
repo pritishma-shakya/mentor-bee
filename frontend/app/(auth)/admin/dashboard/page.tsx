@@ -19,6 +19,7 @@ interface User {
   name: string;
   email: string;
   role: "student" | "mentor" | "admin";
+  profile_picture?: string;
   created_at?: string;
 }
 
@@ -112,7 +113,7 @@ export default function AdminDashboard() {
   if (!user) return <div className="min-h-screen flex items-center justify-center">Unauthorized</div>;
 
   return (
-    <AuthLayout header={{ title: "Admin Dashboard", subtitle: "Monitor platform activity" }}>
+    <AuthLayout header={{ title: "Admin Dashboard", subtitle: "Monitor platform activity", user }}>
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard icon={Users} label="Total Users" value={summary.totalUsers} />

@@ -19,8 +19,16 @@ export default function RevenuePage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalRevenue, setTotalRevenue] = useState(0);
+  const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
+    fetch("http://localhost:5000/api/auth/profile", { credentials: "include" })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) setUser(data.user);
+      })
+      .catch(err => console.error(err));
+
     const fetchTransactions = async () => {
       try {
         const res = await fetch("http://localhost:5000/api/admin/transactions", { credentials: "include" });
@@ -40,7 +48,7 @@ export default function RevenuePage() {
   }, []);
 
   return (
-    <AuthLayout header={{ title: "Manage Revenue", subtitle: "View platform earnings and transactions" }}>
+    <AuthLayout header={{ title: "Manage Revenue", subtitle: "View platform earnings and transactions", user }}>
       <div className="p-4">
         <div className="flex flex-col md:flex-row gap-4 mb-6">
           <div className="bg-white rounded-xl shadow border border-gray-100 p-6 flex-1 text-center">

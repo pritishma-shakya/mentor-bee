@@ -12,8 +12,11 @@ import {
   XCircle,
   CheckCircle,
   MessageCircle,
+  Star,
 } from "lucide-react";
 import Link from "next/link";
+import ReviewModal from "./review-modal";
+import { isSessionActive } from "@/utils/dateUtils";
 
 interface Session {
   id: string;
@@ -36,6 +39,7 @@ interface Session {
   rescheduled_date?: string;
   rescheduled_time?: string;
   payment_status?: "Paid" | "Cash at Venue" | "Not Paid" | string;
+  has_review?: boolean;
 }
 
 interface SessionCardProps {
@@ -60,6 +64,8 @@ const formatDate = (date: string | undefined) => {
 export default function SessionCard({ session, user, onCancel, onRespond }: SessionCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [hasReviewed, setHasReviewed] = useState(session.has_review || false);
 
   // Helper to get correct image URL
   const getProfileImage = (path: string) => {
@@ -104,16 +110,21 @@ export default function SessionCard({ session, user, onCancel, onRespond }: Sess
   const renderActions = (isExpanded: boolean) => {
     return (
       <div className={`flex gap-2 flex-wrap ${isExpanded ? 'pt-2' : 'mt-4'}`}>
-        {(session.status === "Accepted" || session.status === "Started") && session.type === 'Online' ? (
+        {(session.status === "Accepted" || session.status === "Started") && session.type === 'Online' && isSessionActive(session.date, session.time) ? (
           <Link href={`/session-call/${session.id}`} className={`${isExpanded ? 'px-6 py-2' : 'px-4 py-1.5'} bg-orange-600 hover:bg-orange-700 text-white font-semibold rounded-lg ${isExpanded ? 'text-sm' : 'text-xs'} flex items-center justify-center gap-2 transition shadow-sm`}>
             <Video className={isExpanded ? "w-4 h-4" : "w-3.5 h-3.5"} />
             Join Session
           </Link>
-        ) : (session.status === "Accepted" || session.status === "Started") && session.type === 'In-Person' ? (
+        ) : (session.status === "Accepted" || session.status === "Started") && session.type === 'In-Person' && isSessionActive(session.date, session.time) ? (
           <button className={`${isExpanded ? 'px-6 py-2' : 'px-4 py-1.5'} bg-orange-600 hover:bg-orange-700 text-white font-semibold rounded-lg ${isExpanded ? 'text-sm' : 'text-xs'} flex items-center justify-center gap-2 transition shadow-sm`}>
             <Play className={isExpanded ? "w-4 h-4" : "w-3.5 h-3.5"} />
             {session.status === "Started" ? "Continue Session" : "Start Session"}
           </button>
+        ) : (session.status === "Accepted" || session.status === "Started") ? (
+          <div className={`${isExpanded ? 'px-4 py-2 text-sm' : 'px-4 py-1.5 text-[11px]'} bg-gray-100 text-gray-500 font-medium rounded-lg flex items-center gap-2 border border-gray-200`}>
+            <Clock className="w-3.5 h-3.5" />
+            Available at {session.time}
+          </div>
         ) : null}
 
         <Link href={`/messages?mentorId=${session.mentor_user_id}`} className={`${isExpanded ? 'px-6 py-2' : 'px-4 py-1.5'} border border-gray-300 bg-white hover:bg-gray-50 rounded-lg font-medium ${isExpanded ? 'text-sm' : 'text-xs'} text-gray-800 flex items-center gap-2 transition shadow-sm`}>
@@ -122,7 +133,7 @@ export default function SessionCard({ session, user, onCancel, onRespond }: Sess
 
         {/* ACTION BUTTONS */}
         {["Accepted", "Pending"].includes(session.status) && (
-          <Link 
+          <Link
             href={`/book-session/${session.mentor_id}?rescheduleSessionId=${session.id}`}
             className={`${isExpanded ? 'px-4 py-2 text-sm' : 'px-4 py-1.5 text-xs'} border border-orange-200 text-orange-600 hover:bg-orange-50 rounded-lg font-medium transition flex items-center gap-2`}
           >
@@ -133,6 +144,16 @@ export default function SessionCard({ session, user, onCancel, onRespond }: Sess
         {["Pending", "Accepted", "Reschedule Requested"].includes(session.status) && onCancel && session.status !== "Cancel Requested" && (
           <button onClick={() => setShowCancelConfirm(true)} className={`${isExpanded ? 'px-4 py-2 text-sm' : 'px-4 py-1.5 text-xs'} text-red-600 hover:bg-red-50 rounded-lg font-medium transition flex items-center gap-2`}>
             <XCircle className={isExpanded ? "w-4 h-4" : "w-3.5 h-3.5"} /> Cancel
+          </button>
+        )}
+
+        {session.status === "Completed" && user?.role === "student" && !hasReviewed && (
+          <button
+            onClick={() => setShowReviewModal(true)}
+            className={`${isExpanded ? 'px-6 py-2' : 'px-4 py-1.5'} bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded-lg ${isExpanded ? 'text-sm' : 'text-xs'} flex items-center justify-center gap-2 transition shadow-sm`}
+          >
+            <Star className={isExpanded ? "w-4 h-4" : "w-3.5 h-3.5"} />
+            Rate Session
           </button>
         )}
       </div>
@@ -218,13 +239,13 @@ export default function SessionCard({ session, user, onCancel, onRespond }: Sess
           </div>
           {!isRequester(session.status) && onRespond && (
             <div className="flex gap-2">
-              <button 
+              <button
                 onClick={() => onRespond(session.id, "cancel", "accept")}
                 className="px-3 py-1 bg-red-600 text-white rounded font-bold hover:bg-red-700 transition"
               >
                 Accept
               </button>
-              <button 
+              <button
                 onClick={() => onRespond(session.id, "cancel", "reject")}
                 className="px-3 py-1 bg-white border border-gray-300 text-gray-700 rounded font-bold hover:bg-gray-50 transition"
               >
@@ -244,17 +265,17 @@ export default function SessionCard({ session, user, onCancel, onRespond }: Sess
             </div>
             {!isRequester(session.status) && onRespond && (
               <div className="flex gap-2">
-                <button 
-                    onClick={() => onRespond(session.id, "reschedule", "accept")}
-                    className="px-3 py-1 bg-orange-600 text-white rounded font-bold hover:bg-orange-700 transition shadow-sm"
+                <button
+                  onClick={() => onRespond(session.id, "reschedule", "accept")}
+                  className="px-3 py-1 bg-orange-600 text-white rounded font-bold hover:bg-orange-700 transition shadow-sm"
                 >
-                    Accept
+                  Accept
                 </button>
-                <button 
-                   onClick={() => onRespond(session.id, "reschedule", "reject")}
-                   className="px-3 py-1 bg-white border border-gray-300 text-gray-700 rounded font-bold hover:bg-gray-50 transition shadow-sm"
+                <button
+                  onClick={() => onRespond(session.id, "reschedule", "reject")}
+                  className="px-3 py-1 bg-white border border-gray-300 text-gray-700 rounded font-bold hover:bg-gray-50 transition shadow-sm"
                 >
-                    Reject
+                  Reject
                 </button>
               </div>
             )}
@@ -308,6 +329,14 @@ export default function SessionCard({ session, user, onCancel, onRespond }: Sess
           </div>
         </div>
       )}
+      {/* Review Modal */}
+      <ReviewModal
+        isOpen={showReviewModal}
+        onClose={() => setShowReviewModal(false)}
+        sessionId={session.id}
+        mentorName={session.mentor_name || "Mentor"}
+        onSuccess={() => setHasReviewed(true)}
+      />
     </div>
   );
 }
