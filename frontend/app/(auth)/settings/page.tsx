@@ -2,16 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "react-hot-toast";
-import { User, Shield, Briefcase, Loader2, Bell, Globe, Sparkles } from "lucide-react";
+import { Loader2, User, Lock, Briefcase } from "lucide-react";
 import AuthLayout from "../layout";
 import AccountSettings from "@/components/settings/AccountSettings";
-import MentorProfileSettings from "@/components/settings/MentorProfileSettings";
 import SecuritySettings from "@/components/settings/SecuritySettings";
-import NotificationSettings from "@/components/settings/NotificationSettings";
-import PreferenceSettings from "@/components/settings/PreferenceSettings";
-import StudentSpecificSettings from "@/components/settings/StudentSpecificSettings";
+import MentorProfileSettings from "@/components/settings/MentorProfileSettings";
 
-type TabType = "account" | "profile" | "learning" | "security" | "notifications" | "preferences";
+type TabType = "account" | "professional" | "security";
 
 export default function SettingsPage() {
   const [user, setUser] = useState<any>(null);
@@ -48,31 +45,30 @@ export default function SettingsPage() {
   }
 
   const tabs = [
-    { id: "account", label: "Account Info", icon: User },
-    ...(user?.role === "mentor" ? [{ id: "profile", label: "Professional Profile", icon: Briefcase }] : []),
-    ...(user?.role === "student" ? [{ id: "learning", label: "Learning & Rewards", icon: Sparkles }] : []),
-    { id: "security", label: "Security", icon: Shield },
-    { id: "notifications", label: "Notifications", icon: Bell },
-    { id: "preferences", label: "Preferences", icon: Globe },
+    { id: "account" as TabType, label: "Profile Info", icon: User },
+    ...(user?.role === "mentor"
+      ? [{ id: "professional" as TabType, label: "Professional Profile", icon: Briefcase }]
+      : []),
+    { id: "security" as TabType, label: "Change Password", icon: Lock },
   ];
 
   return (
-    <AuthLayout 
-      header={{ 
-        title: "Settings", 
-        subtitle: "Manage your account, profile and security preferences", 
-        user 
+    <AuthLayout
+      header={{
+        title: "Settings",
+        subtitle: "Manage your profile and account",
+        user,
       }}
     >
       <div className="space-y-6">
-        {/* Horizontal Tabs */}
-        <div className="flex items-center gap-8 border-b border-gray-100 mb-6 overflow-x-auto no-scrollbar">
+        {/* Tabs */}
+        <div className="flex items-center gap-8 border-b border-gray-200 overflow-x-auto">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id;
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as TabType)}
+                onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center gap-2 pb-4 px-1 text-sm font-medium relative transition-all whitespace-nowrap
                   ${isActive ? "text-orange-600" : "text-gray-500 hover:text-gray-700"}`}
               >
@@ -88,12 +84,13 @@ export default function SettingsPage() {
 
         {/* Tab Content */}
         <div className="bg-white rounded-2xl p-8 border border-gray-100 shadow-sm min-h-[500px]">
-          {activeTab === "account" && <AccountSettings user={user} onUpdate={(updated: any) => setUser({...user, ...updated})} />}
-          {activeTab === "profile" && user?.role === "mentor" && <MentorProfileSettings user={user} />}
-          {activeTab === "learning" && user?.role === "student" && <StudentSpecificSettings user={user} onUpdate={(updated: any) => setUser({...user, ...updated})} />}
+          {activeTab === "account" && (
+            <AccountSettings user={user} onUpdate={(updated: any) => setUser({ ...user, ...updated })} />
+          )}
+          {activeTab === "professional" && user?.role === "mentor" && (
+            <MentorProfileSettings user={user} />
+          )}
           {activeTab === "security" && <SecuritySettings />}
-          {activeTab === "notifications" && <NotificationSettings user={user} onUpdate={(updated: any) => setUser({...user, ...updated})} />}
-          {activeTab === "preferences" && <PreferenceSettings user={user} onUpdate={(updated: any) => setUser({...user, ...updated})} />}
         </div>
       </div>
     </AuthLayout>

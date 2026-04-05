@@ -11,10 +11,11 @@ import {
     MapPin,
     CheckCircle,
     XCircle,
-    Play
+    Play,
+    ChevronLeft
 } from "lucide-react";
 import Link from "next/link";
-import { isSessionActive } from "@/utils/dateUtils";
+import { isSessionActive, getNepalNow, parseNepalDateTime, toNepaliDateStr } from "@/utils/dateUtils";
 
 interface Session {
     id: string;
@@ -69,11 +70,98 @@ export default function MentorSessionCard({
     onComplete,
     onStart,
     onRespond,
+    onReschedule,
     onMarkCashPaid,
 }: MentorSessionCardProps) {
     const [expanded, setExpanded] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
     const [confirmType, setConfirmType] = useState<"reject" | "cancel" | null>(null);
+
+    // Reschedule states
+    const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+    const [rescheduleDate, setRescheduleDate] = useState("");
+    const [rescheduleTime, setRescheduleTime] = useState("");
+    const [currentMonth, setCurrentMonth] = useState(new Date());
+    const [bookedDates, setBookedDates] = useState<string[]>([]); // stored as 'YYYY-MM-DD|HH:MM AM'
+
+    const openRescheduleModal = async () => {
+        setShowRescheduleModal(true);
+        // Fetch mentor's sessions to find booked date-time combinations
+        try {
+            const res = await fetch("http://localhost:5000/api/sessions/mentor", { credentials: "include" });
+            const data = await res.json();
+            if (Array.isArray(data)) {
+                const occupied = data
+                    .filter((s: any) =>
+                        s.id !== session.id &&
+                        ["Pending", "Accepted", "Started"].includes(s.status)
+                    )
+                    .map((s: any) => `${toNepaliDateStr(s.date)}|${s.time}`);
+                setBookedDates([...new Set(occupied)]);
+            }
+        } catch (err) {
+            console.error("Failed to fetch sessions for reschedule:", err);
+        }
+    };
+
+    const normalizeTimeTo24 = (time: string): string => {
+        const t = time.trim().toLowerCase();
+        if (t.includes('am') || t.includes('pm')) {
+            const match = t.match(/(\d+):(\d+)\s*(am|pm)/);
+            if (!match) return t;
+            let hours = parseInt(match[1]);
+            const minutes = parseInt(match[2]);
+            const modifier = match[3];
+            if (modifier === 'pm' && hours < 12) hours += 12;
+            if (modifier === 'am' && hours === 12) hours = 0;
+            return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+        }
+        // Already 24-hour, just normalize to HH:MM
+        const parts = t.split(':');
+        return `${String(parseInt(parts[0])).padStart(2, '0')}:${String(parseInt(parts[1] || '0')).padStart(2, '0')}`;
+    };
+
+    const isTimeBooked = (date: string, time: string) => {
+        const normalizedUITime = normalizeTimeTo24(time);
+        return bookedDates.some(entry => {
+            const [d, t] = entry.split('|');
+            return d === date && normalizeTimeTo24(t) === normalizedUITime;
+        });
+    };
+
+    const firstDayOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1).getDay();
+    const daysInMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate();
+    const monthName = currentMonth.toLocaleString("default", { month: "long" });
+    const year = currentMonth.getFullYear();
+
+    const handlePrevMonth = () => setCurrentMonth(prev => new Date(prev.getFullYear(), prev.getMonth() - 1));
+    const handleNextMonth = () => setCurrentMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + 1));
+
+    const timeSlots = [
+        "9:00 AM", "10:00 AM", "11:00 AM", "12:00 PM",
+        "1:00 PM", "2:00 PM", "3:00 PM", "4:00 PM",
+        "5:00 PM", "6:00 PM", "7:00 PM", "8:00 PM"
+    ];
+
+    const isPastSlot = (dateStr: string, timeStr?: string) => {
+        const nepalNow = getNepalNow();
+        const targetDate = parseNepalDateTime(dateStr, timeStr, !timeStr);
+        return targetDate < nepalNow;
+    };
+
+    const handleDateClick = (day: number) => {
+        const dateStr = `${year}-${(currentMonth.getMonth() + 1).toString().padStart(2, "0")}-${day.toString().padStart(2, "0")}`;
+        const nepDate = toNepaliDateStr(dateStr + "T00:00:00");
+        setRescheduleDate(nepDate);
+        setRescheduleTime("");
+    };
+
+    const handleRescheduleSubmit = () => {
+        if (onReschedule && rescheduleDate && rescheduleTime) {
+            onReschedule(session.id, rescheduleDate, rescheduleTime);
+            setShowRescheduleModal(false);
+        }
+    };
 
     // Helper to get correct image URL
     const getProfileImage = (path: string) => {
@@ -173,13 +261,13 @@ export default function MentorSessionCard({
 
                         {/* RESCHEDULE button */}
                         {["Accepted", "Pending"].includes(session.status) && (
-                            <Link 
-                                href={`/mentor/schedule?rescheduleSessionId=${session.id}&studentName=${session.student_name}`}
+                            <button 
+                                onClick={openRescheduleModal}
                                 className={`${isExpanded ? 'px-6 py-2' : 'px-4 py-1.5'} border border-orange-200 text-orange-600 hover:bg-orange-50 rounded-lg font-medium ${isExpanded ? 'text-sm' : 'text-xs'} flex items-center justify-center gap-2 transition shadow-sm bg-white overflow-hidden`}
                             >
                                 <Calendar className={`${isExpanded ? 'w-4 h-4' : 'w-3.5 h-3.5'}`} />
                                 Reschedule
-                            </Link>
+                            </button>
                         )}
 
                         {/* CANCEL button for mentor */}
@@ -399,6 +487,107 @@ export default function MentorSessionCard({
                                 className="px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg transition shadow-sm"
                             >
                                 {confirmType === "reject" ? "Yes, Reject" : "Yes, Request"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Reschedule Modal */}
+            {showRescheduleModal && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+                    <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200">
+                        <div className="p-6">
+                            <h3 className="text-lg font-semibold text-gray-900 mb-4">Reschedule Session</h3>
+                            
+                            <div className="max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-900 mb-2 flex items-center gap-1.5">
+                                        <Calendar className="w-4 h-4 text-gray-500" /> Select Date
+                                    </label>
+                                    <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                                        <div className="flex justify-between items-center mb-4">
+                                            <button onClick={handlePrevMonth} className="p-2 hover:bg-gray-200 rounded-full transition"><ChevronLeft className="w-4 h-4 text-gray-700" /></button>
+                                            <span className="text-sm font-bold text-gray-900">{monthName} {year}</span>
+                                            <button onClick={handleNextMonth} className="p-2 hover:bg-gray-200 rounded-full transition"><ChevronRight className="w-4 h-4 text-gray-700" /></button>
+                                        </div>
+
+                                        <div className="grid grid-cols-7 gap-1 text-center text-xs text-gray-500 font-bold mb-2">
+                                            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(d => <div key={d}>{d}</div>)}
+                                        </div>
+
+                                        <div className="grid grid-cols-7 gap-1.5">
+                                            {Array(firstDayOfMonth).fill(0).map((_, i) => <div key={`empty-${i}`} className="h-9" />)}
+                                            {Array.from({ length: daysInMonth }, (_, i) => {
+                                                const day = i + 1;
+                                                const dateStr = `${year}-${(currentMonth.getMonth() + 1).toString().padStart(2, "0")}-${day.toString().padStart(2, "0")}`;
+                                                const calendarDate = toNepaliDateStr(dateStr + "T00:00:00");
+                                                const isSelected = rescheduleDate === calendarDate;
+                                                const isPast = isPastSlot(calendarDate);
+
+                                                return (
+                                                    <button
+                                                        key={day}
+                                                        onClick={() => !isPast && handleDateClick(day)}
+                                                        disabled={isPast}
+                                                        className={`h-9 rounded-lg text-sm font-bold transition-all ${isSelected ? "bg-orange-500 text-white shadow-md scale-105" :
+                                                            !isPast ? "bg-white text-gray-700 hover:bg-gray-200 border border-gray-200" :
+                                                                "bg-gray-50 text-gray-300 cursor-not-allowed"
+                                                            }`}
+                                                    >
+                                                        {day}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Time Slots */}
+                                {rescheduleDate && (
+                                    <div className="mt-6 animate-in fade-in duration-300">
+                                        <label className="block text-sm font-semibold text-gray-900 mb-2 flex items-center gap-1.5">
+                                            <Clock className="w-4 h-4 text-gray-500" /> Select Time
+                                        </label>
+                                        <div className="grid grid-cols-3 gap-2">
+                                            {timeSlots.map(time => {
+                                                const isPast = isPastSlot(rescheduleDate, time);
+                                                const isTimeTaken = isTimeBooked(rescheduleDate, time);
+                                                const isDisabled = isPast || isTimeTaken;
+                                                return (
+                                                    <button
+                                                        key={time}
+                                                        onClick={() => !isDisabled && setRescheduleTime(time)}
+                                                        disabled={isDisabled}
+                                                        title={isTimeTaken ? "Another session is booked at this time" : undefined}
+                                                        className={`py-2 rounded-lg text-xs font-bold transition shadow-sm ${rescheduleTime === time ? "bg-orange-500 text-white ring-2 ring-orange-200" :
+                                                            isTimeTaken ? "bg-red-50 text-red-300 border border-red-100 cursor-not-allowed" :
+                                                            !isPast ? "bg-white border border-gray-200 text-gray-900 hover:border-orange-300 hover:bg-orange-50" :
+                                                                "bg-gray-50 text-gray-300 cursor-not-allowed"
+                                                            }`}
+                                                    >
+                                                        {time}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        <div className="bg-gray-50 px-6 py-4 flex justify-end gap-3">
+                            <button
+                                onClick={() => setShowRescheduleModal(false)}
+                                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 rounded-lg transition"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleRescheduleSubmit}
+                                disabled={!rescheduleDate || !rescheduleTime}
+                                className="px-4 py-2 text-sm font-semibold text-white bg-orange-600 hover:bg-orange-700 rounded-lg transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Request Reschedule
                             </button>
                         </div>
                     </div>

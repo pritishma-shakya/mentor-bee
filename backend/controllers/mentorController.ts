@@ -2,6 +2,7 @@ import { Response } from "express";
 import { pgPool } from "../config/database";
 import { AuthRequest } from "../middlewares/authMiddleware";
 import cloudinary from "../config/cloudinary";
+import { uploadToCloudinary } from "../utils/cloudinaryUpload";
 
 // =====================
 // List all expertise (for dropdown when setting up profile)
@@ -21,7 +22,15 @@ export const listExpertise = async (_req: AuthRequest, res: Response) => {
 
 export const setupMentorProfile = async (req: AuthRequest, res: Response) => {
   if (!req.user || req.user.role !== "mentor") {
-    return res.status(403).json({ success: false, message: "Forbidden" });
+    console.error("setupMentorProfile Forbidden check failed:", {
+      role: req.user?.role,
+      id: req.user?.id,
+      email: req.user?.email
+    });
+    return res.status(403).json({
+      success: false,
+      message: "Forbidden: Only mentors can complete this setup."
+    });
   }
   const {
     bio,
@@ -30,6 +39,10 @@ export const setupMentorProfile = async (req: AuthRequest, res: Response) => {
     responseTime,
     expertiseIds,
     hourlyRate,
+    phone_number,
+    customExpertise,
+    highestDegree,
+    phdDegree,
   } = req.body as {
     bio: string;
     experience: string;
@@ -37,9 +50,13 @@ export const setupMentorProfile = async (req: AuthRequest, res: Response) => {
     responseTime?: string;
     expertiseIds: string[];
     hourlyRate?: number | null;
+    phone_number?: string;
+    customExpertise?: string[];
+    highestDegree?: string;
+    phdDegree?: string;
   };
 
-  if (!bio || !experience || !location || !Array.isArray(expertiseIds) || expertiseIds.length === 0) {
+  if (!bio || !experience || !location || !Array.isArray(expertiseIds) || expertiseIds.length === 0 || !phone_number) {
     return res.status(422).json({
       success: false,
       message: "All required fields must be provided",
@@ -52,48 +69,80 @@ export const setupMentorProfile = async (req: AuthRequest, res: Response) => {
     await client.query("BEGIN");
 
     // =========================
-    // Upload profile picture if provided
+    // Upload files if provided
     // =========================
     let profilePictureUrl: string | null = null;
+    let citizenshipIdUrl: string | null = null;
+    let bachelorsDegreeUrl: string | null = null;
+    let mastersDegreeUrl: string | null = null;
+    let experienceCertificateUrl: string | null = null;
+    let plusTwoUrl: string | null = null;
+    let phdUrl: string | null = null;
 
-    if (req.file) {
-      // Use non-null assertion (!) because we already checked req.file exists
-      const buffer = req.file.buffer!;
-      
-      const uploadResult = await new Promise<any>((resolve, reject) => {
-        cloudinary.uploader
-          .upload_stream(
-            {
-              folder: "mentor_profiles",
-              public_id: req.user!.id,
-              overwrite: true,
-              resource_type: "image",
-            },
-            (error, result) => {
-              if (error) reject(error);
-              else resolve(result);
-            }
-          )
-          .end(buffer); // safe now
-      });
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
 
-      profilePictureUrl = uploadResult.secure_url;
-
-      await client.query(
-        "UPDATE users SET profile_picture = $1 WHERE id = $2",
-        [profilePictureUrl, req.user.id]
-      );
+    if (files) {
+      if (files.profilePicture?.[0]) {
+        const result = await uploadToCloudinary(files.profilePicture[0]);
+        profilePictureUrl = result.secure_url;
+      }
+      if (files.citizenshipId?.[0]) {
+        const result = await uploadToCloudinary(files.citizenshipId[0]);
+        citizenshipIdUrl = result.secure_url;
+      }
+      if (files.bachelorsDegree?.[0]) {
+        const result = await uploadToCloudinary(files.bachelorsDegree[0]);
+        bachelorsDegreeUrl = result.secure_url;
+      }
+      if (files.mastersDegree?.[0]) {
+        const result = await uploadToCloudinary(files.mastersDegree[0]);
+        mastersDegreeUrl = result.secure_url;
+      }
+      if (files.experienceCertificate?.[0]) {
+        const result = await uploadToCloudinary(files.experienceCertificate[0]);
+        experienceCertificateUrl = result.secure_url;
+      }
+      if (files.plusTwoTranscript?.[0]) {
+        const result = await uploadToCloudinary(files.plusTwoTranscript[0]);
+        plusTwoUrl = result.secure_url;
+      }
+      if (files.phdDegree?.[0]) {
+        const result = await uploadToCloudinary(files.phdDegree[0]);
+        phdUrl = result.secure_url;
+      }
     }
+
+    // Update user info (profile picture and phone number)
+    await client.query(
+      "UPDATE users SET profile_picture = COALESCE($1, profile_picture), phone_number = $2 WHERE id = $3",
+      [profilePictureUrl, phone_number, req.user.id]
+    );
 
     // =========================
     // Insert mentor profile
     // =========================
     const { rows } = await client.query(
       `INSERT INTO mentors
-         (user_id, bio, experience, location, response_time, hourly_rate, status)
-       VALUES ($1, $2, $3, $4, $5, $6, 'pending')
+         (user_id, bio, experience, location, response_time, hourly_rate, status, 
+          citizenship_id_url, bachelors_degree_url, masters_degree_url, experience_certificate_url,
+          highest_degree, plus_two_url, phd_url)
+       VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, $8, $9, $10, $11, $12, $13)
        RETURNING id`,
-      [req.user.id, bio, experience, location, responseTime || null, hourlyRate || null]
+      [
+        req.user.id,
+        bio,
+        experience,
+        location,
+        responseTime || null,
+        hourlyRate || null,
+        citizenshipIdUrl,
+        bachelorsDegreeUrl,
+        mastersDegreeUrl,
+        experienceCertificateUrl,
+        highestDegree || null,
+        plusTwoUrl,
+        phdUrl
+      ]
     );
 
     const mentorId: string = rows[0].id;
@@ -101,13 +150,40 @@ export const setupMentorProfile = async (req: AuthRequest, res: Response) => {
     // =========================
     // Insert expertise
     // =========================
-    for (const expId of expertiseIds) {
-      await client.query(
-        `INSERT INTO mentor_expertise (mentor_id, expertise_id)
-         VALUES ($1, $2)
-         ON CONFLICT DO NOTHING`,
-        [mentorId, expId]
-      );
+    // Existing ones
+    if (Array.isArray(expertiseIds)) {
+      for (const expId of expertiseIds) {
+        await client.query(
+          `INSERT INTO mentor_expertise (mentor_id, expertise_id)
+           VALUES ($1, $2)
+           ON CONFLICT DO NOTHING`,
+          [mentorId, expId]
+        );
+      }
+    }
+
+    // New custom ones
+    if (Array.isArray(customExpertise)) {
+      for (const name of customExpertise) {
+        if (!name || name.trim() === "") continue;
+
+        // Insert expertise if it doesn't exist, or just get the ID
+        const { rows: expRows } = await client.query(
+          `INSERT INTO expertise (name) 
+           VALUES ($1) 
+           ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+           RETURNING id`,
+          [name.trim()]
+        );
+
+        const newExpId = expRows[0].id;
+        await client.query(
+          `INSERT INTO mentor_expertise (mentor_id, expertise_id)
+           VALUES ($1, $2)
+           ON CONFLICT DO NOTHING`,
+          [mentorId, newExpId]
+        );
+      }
     }
 
     await client.query("COMMIT");
@@ -134,12 +210,12 @@ export const updateMentorProfile = async (req: AuthRequest, res: Response) => {
     return res.status(403).json({ success: false, message: "Forbidden" });
   }
 
-  const { 
-    bio, 
-    experience, 
-    location, 
-    hourlyRate, 
-    responseTime, 
+  const {
+    bio,
+    experience,
+    location,
+    hourlyRate,
+    responseTime,
     expertiseIds,
     linkedin_url,
     portfolio_url,
@@ -168,10 +244,10 @@ export const updateMentorProfile = async (req: AuthRequest, res: Response) => {
        WHERE user_id = $11
        RETURNING id`,
       [
-        bio, 
-        experience, 
-        location, 
-        hourlyRate || null, 
+        bio,
+        experience,
+        location,
+        hourlyRate || null,
         responseTime || null,
         linkedin_url,
         portfolio_url,
@@ -234,15 +310,7 @@ export const getMentorProfile = async (req: AuthRequest, res: Response) => {
          u.email,
          u.profile_picture,
          u.phone_number,
-         u.bio as user_bio,
-         u.language,
-         u.theme,
-         u.timezone,
-         m.linkedin_url,
-         m.portfolio_url,
-         m.certifications,
-         m.auto_accept,
-         m.buffer_time
+         u.bio as user_bio
        FROM mentors m
        JOIN users u ON m.user_id = u.id
        WHERE m.id = $1`,
@@ -320,19 +388,19 @@ export const listMentors = async (_req: AuthRequest, res: Response) => {
 
     // Fetch ratings for all mentors in this list
     const { rows: ratingRows } = await client.query(
-       `SELECT mentor_id, AVG(rating) as avg_rating, COUNT(*) as review_count 
+      `SELECT mentor_id, AVG(rating) as avg_rating, COUNT(*) as review_count 
         FROM reviews 
         WHERE mentor_id = ANY($1::uuid[])
         GROUP BY mentor_id`,
-       [mentorIds]
+      [mentorIds]
     );
 
     const ratingMap: Record<string, { rating: number, count: number }> = {};
     ratingRows.forEach(r => {
-       ratingMap[r.mentor_id] = {
-           rating: parseFloat(parseFloat(r.avg_rating).toFixed(1)),
-           count: parseInt(r.review_count)
-       };
+      ratingMap[r.mentor_id] = {
+        rating: parseFloat(parseFloat(r.avg_rating).toFixed(1)),
+        count: parseInt(r.review_count)
+      };
     });
 
     const { rows: expertiseRows } = await client.query(
@@ -533,6 +601,102 @@ export const getMentorStudents = async (req: AuthRequest, res: Response) => {
   } catch (err) {
     console.error("getMentorStudents error:", err);
     res.status(500).json({ success: false, message: "Internal server error" });
+  } finally {
+    client.release();
+  }
+};
+
+export const getMyMentorProfile = async (req: AuthRequest, res: Response) => {
+  const userId = req.user?.id;
+
+  if (!userId) {
+    return res.status(401).json({ success: false, message: "Unauthorized" });
+  }
+
+  const client = await pgPool.connect();
+
+  try {
+    // ⭐ SINGLE QUERY (mentor + user + documents together)
+    const { rows } = await client.query(
+      `SELECT 
+         m.id,
+         m.user_id,
+         m.bio,
+         m.experience,
+         m.location,
+         m.response_time,
+         m.hourly_rate,
+         m.status,
+         m.created_at,
+
+         -- documents (IMPORTANT FIX)
+         m.citizenship_id_url,
+         m.bachelors_degree_url,
+         m.masters_degree_url,
+         m.experience_certificate_url,
+         m.plus_two_url,
+         m.phd_url,
+
+         u.name AS full_name,
+         u.email,
+         u.profile_picture,
+         u.phone_number
+       FROM mentors m
+       JOIN users u ON m.user_id = u.id
+       WHERE m.user_id = $1`,
+      [userId]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ success: false, message: "Mentor not found" });
+    }
+
+    const mentor = rows[0];
+
+    // ⭐ expertise
+    const { rows: expertiseRows } = await client.query(
+      `SELECT e.id, e.name
+       FROM mentor_expertise me
+       JOIN expertise e ON me.expertise_id = e.id
+       WHERE me.mentor_id = $1`,
+      [mentor.id]
+    );
+
+    mentor.expertise = expertiseRows || [];
+
+    // ⭐ clean documents mapping (SAFE)
+    mentor.documents = [
+      mentor.citizenship_id_url && {
+        name: "Citizenship",
+        url: mentor.citizenship_id_url,
+      },
+      mentor.bachelors_degree_url && {
+        name: "Bachelors Degree",
+        url: mentor.bachelors_degree_url,
+      },
+      mentor.masters_degree_url && {
+        name: "Masters Degree",
+        url: mentor.masters_degree_url,
+      },
+      mentor.experience_certificate_url && {
+        name: "Experience Certificate",
+        url: mentor.experience_certificate_url,
+      },
+      mentor.plus_two_url && {
+        name: "Plus Two Transcript",
+        url: mentor.plus_two_url,
+      },
+      mentor.phd_url && {
+        name: "PhD Degree",
+        url: mentor.phd_url,
+      },
+    ].filter(Boolean);
+
+    return res.json({ success: true, data: mentor });
+
+  } catch (err) {
+    console.error("getMyMentorProfile error:", err);
+    return res.status(500).json({ success: false, message: "Internal server error" });
   } finally {
     client.release();
   }

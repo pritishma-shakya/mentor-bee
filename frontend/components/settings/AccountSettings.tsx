@@ -72,10 +72,10 @@ export default function AccountSettings({ user, onUpdate }: AccountSettingsProps
           <div className="relative group">
             <div className="w-24 h-24 rounded-full overflow-hidden bg-gray-100 border-2 border-white shadow-sm ring-1 ring-gray-200">
               {previewUrl ? (
-                <img 
-                  src={previewUrl.startsWith('http') || previewUrl.startsWith('/') ? (previewUrl.startsWith('http') ? previewUrl : `http://localhost:5000${previewUrl}`) : previewUrl} 
-                  alt="Preview" 
-                  className="w-full h-full object-cover" 
+                <img
+                  src={previewUrl.startsWith('http') || previewUrl.startsWith('/') ? (previewUrl.startsWith('http') ? previewUrl : `http://localhost:5000${previewUrl}`) : previewUrl}
+                  alt="Preview"
+                  className="w-full h-full object-cover"
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-gray-400">
@@ -134,14 +134,14 @@ export default function AccountSettings({ user, onUpdate }: AccountSettingsProps
 
           {/* Email (Disabled) */}
           <div className="space-y-1 opacity-60">
-            <label className="text-xs font-medium text-gray-700 ml-1">Email Address (Cannot be changed)</label>
+            <label className="text-xs font-medium text-gray-700 ml-1">Email Address</label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 type="email"
                 value={user?.email || ""}
                 disabled
-                className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm cursor-not-allowed"
+                className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm cursor-not-allowed text-gray-600"
               />
             </div>
           </div>

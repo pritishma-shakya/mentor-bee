@@ -17,9 +17,9 @@ export const getMentorSchedules = async (mentorId: string): Promise<Schedule[]> 
     [mentorId]
   );
 
-  // 2. Fetch all booked sessions for this mentor that are NOT cancelled
+  // 2. Fetch all booked sessions for this mentor that are NOT cancelled or rejected
   const { rows: sessions } = await pgPool.query(
-    `SELECT date, time FROM sessions WHERE mentor_id=$1 AND status != 'Cancelled'`,
+    `SELECT date, time FROM sessions WHERE mentor_id=$1 AND status NOT IN ('Cancelled', 'Rejected')`,
     [mentorId]
   );
 

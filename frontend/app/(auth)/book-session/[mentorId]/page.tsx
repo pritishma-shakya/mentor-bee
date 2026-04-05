@@ -64,7 +64,7 @@ export default function BookSessionPage() {
   const [sessionType, setSessionType] = useState<"Online" | "In-Person">("Online");
   const [locationResult, setLocationResult] = useState<{ lat: number; lng: number; address: string } | null>(null);
   const [isLocationConfirmed, setIsLocationConfirmed] = useState(false);
-  
+
   // Promo code
   const [promoCodeInput, setPromoCodeInput] = useState("");
   const [appliedPromo, setAppliedPromo] = useState<{ id: string; type: string; value: number; description?: string } | null>(null);
@@ -249,7 +249,7 @@ export default function BookSessionPage() {
     if (!mentor) return 0;
     const base = mentor.hourly_rate;
     if (!appliedPromo) return base;
-    
+
     if (appliedPromo.type === 'percentage') {
       return Math.max(0, base - (base * appliedPromo.value / 100));
     } else {
@@ -480,7 +480,7 @@ export default function BookSessionPage() {
                 </div>
               </div>
             )}
-            
+
             {/* Available Offers */}
             {availablePromos.length > 0 && !appliedPromo && (
               <div className="mb-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
@@ -730,66 +730,64 @@ export default function BookSessionPage() {
                 {paymentMethod === "eSewa" && <CheckCircle2 className="w-6 h-6 text-green-600" />}
               </button>
 
-              {/* Cash Option - Only for In-Person */}
-              {sessionType === "In-Person" && (
-                <button
-                  onClick={() => setPaymentMethod("Cash")}
-                  className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition-all ${paymentMethod === "Cash"
-                    ? "border-orange-500 bg-orange-50 shadow-md"
-                    : "border-gray-100 bg-gray-50 hover:border-gray-200"
-                    }`}
-                >
-                  <div className="flex items-center gap-4">
-                    <div className={`p-2 rounded-lg ${paymentMethod === "Cash" ? "bg-orange-600 text-white" : "bg-white text-gray-400 border border-gray-200"}`}>
-                      <Banknote className="w-6 h-6" />
-                    </div>
-                    <div className="text-left">
-                      <p className={`font-bold ${paymentMethod === "Cash" ? "text-orange-900" : "text-gray-900"}`}>Pay with Cash</p>
-                      <p className="text-xs text-gray-500">Pay directly at the venue</p>
-                    </div>
+              {/* Cash Option - Only for In-Person (Unlocked for Testing) */}
+              <button
+                onClick={() => setPaymentMethod("Cash")}
+                className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition-all ${paymentMethod === "Cash"
+                  ? "border-orange-500 bg-orange-50 shadow-md"
+                  : "border-gray-100 bg-gray-50 hover:border-gray-200"
+                  }`}
+              >
+                <div className="flex items-center gap-4">
+                  <div className={`p-2 rounded-lg ${paymentMethod === "Cash" ? "bg-orange-600 text-white" : "bg-white text-gray-400 border border-gray-200"}`}>
+                    <Banknote className="w-6 h-6" />
                   </div>
-                  {paymentMethod === "Cash" && <CheckCircle2 className="w-6 h-6 text-orange-600" />}
-                </button>
-              )}
+                  <div className="text-left">
+                    <p className={`font-bold ${paymentMethod === "Cash" ? "text-orange-900" : "text-gray-900"}`}>Pay with Cash</p>
+                    <p className="text-xs text-gray-500">Pay directly without online gateway</p>
+                  </div>
+                </div>
+                {paymentMethod === "Cash" && <CheckCircle2 className="w-6 h-6 text-orange-600" />}
+              </button>
             </div>
             <div className="mb-8">
-               <label className="block text-xs font-bold text-gray-700 uppercase mb-2 ml-1">Promo Code</label>
-               <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <input 
-                      type="text" 
-                      value={promoCodeInput}
-                      onChange={(e) => setPromoCodeInput(e.target.value.toUpperCase())}
-                      placeholder="ENTER CODE"
-                      disabled={appliedPromo !== null || isValidatingPromo}
-                      className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 outline-none font-mono tracking-wider text-gray-900 placeholder:text-gray-500"
-                    />
-                    {appliedPromo && (
-                      <Check className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-green-500" />
-                    )}
-                  </div>
-                  <button 
-                    onClick={appliedPromo ? () => { setAppliedPromo(null); setPromoCodeInput(""); } : handleApplyPromo}
-                    disabled={isValidatingPromo || (!appliedPromo && !promoCodeInput)}
-                    className={`px-4 py-2 rounded-lg text-sm font-bold transition ${appliedPromo 
-                      ? "bg-red-50 text-red-600 border border-red-100 hover:bg-red-100" 
-                      : "bg-orange-500 text-white hover:bg-orange-600 shadow-sm disabled:opacity-50"}`}
-                  >
-                    {isValidatingPromo ? "..." : (appliedPromo ? "Remove" : "Apply")}
-                  </button>
+              <label className="block text-xs font-bold text-gray-700 uppercase mb-2 ml-1">Promo Code</label>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    value={promoCodeInput}
+                    onChange={(e) => setPromoCodeInput(e.target.value.toUpperCase())}
+                    placeholder="ENTER CODE"
+                    disabled={appliedPromo !== null || isValidatingPromo}
+                    className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 outline-none font-mono tracking-wider text-gray-900 placeholder:text-gray-500"
+                  />
+                  {appliedPromo && (
+                    <Check className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-green-500" />
+                  )}
                 </div>
-               {appliedPromo && (
-                 <div className="mt-3 p-3 bg-green-50 border border-green-100 rounded-xl animate-in zoom-in-95 duration-300">
-                   <div className="flex items-center gap-2 mb-1">
-                     <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
-                     <span className="text-xs font-bold text-green-900">Code {promoCodeInput} Applied!</span>
-                   </div>
-                   <p className="text-[10px] text-green-700 font-medium leading-relaxed">
-                     {appliedPromo.description || "Discount successfully applied to your total."}
-                   </p>
-                 </div>
-               )}
+                <button
+                  onClick={appliedPromo ? () => { setAppliedPromo(null); setPromoCodeInput(""); } : handleApplyPromo}
+                  disabled={isValidatingPromo || (!appliedPromo && !promoCodeInput)}
+                  className={`px-4 py-2 rounded-lg text-sm font-bold transition ${appliedPromo
+                    ? "bg-red-50 text-red-600 border border-red-100 hover:bg-red-100"
+                    : "bg-orange-500 text-white hover:bg-orange-600 shadow-sm disabled:opacity-50"}`}
+                >
+                  {isValidatingPromo ? "..." : (appliedPromo ? "Remove" : "Apply")}
+                </button>
+              </div>
+              {appliedPromo && (
+                <div className="mt-3 p-3 bg-green-50 border border-green-100 rounded-xl animate-in zoom-in-95 duration-300">
+                  <div className="flex items-center gap-2 mb-1">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
+                    <span className="text-xs font-bold text-green-900">Code {promoCodeInput} Applied!</span>
+                  </div>
+                  <p className="text-[10px] text-green-700 font-medium leading-relaxed">
+                    {appliedPromo.description || "Discount successfully applied to your total."}
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="bg-gray-50 rounded-xl p-4 mb-8 space-y-2 border border-gray-100">

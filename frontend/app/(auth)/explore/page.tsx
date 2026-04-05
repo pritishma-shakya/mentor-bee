@@ -26,7 +26,6 @@ interface UserProps {
 }
 
 export default function ExplorePage() {
-  const [activeTab, setActiveTab] = useState<"mentors" | "courses" | "groups">("mentors");
   const [searchQuery, setSearchQuery] = useState("");
   const [mentors, setMentors] = useState<Mentor[]>([]);
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
@@ -117,30 +116,13 @@ export default function ExplorePage() {
     <AuthLayout
       header={{
         title: "Explore",
-        subtitle: "Find your next mentor, course, or group session",
+        subtitle: "Find your perfect mentor",
         showSearch: true,
         searchQuery,
         setSearchQuery,
         user,
       }}
     >
-      {/* Tabs */}
-      <div className="flex items-center gap-6 border-b border-gray-200 mb-5">
-        {["mentors", "courses", "groups"].map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab as any)}
-            className={`pb-2 px-1 text-sm font-medium relative transition-colors ${
-              activeTab === tab ? "text-orange-600" : "text-gray-600 hover:text-gray-900"
-            }`}
-          >
-            {tab === "mentors" ? "Mentors" : tab === "courses" ? "Courses" : "Group Sessions"}
-            {activeTab === tab && (
-              <span className="absolute bottom-0 left-0 w-full h-0.5 bg-orange-500 rounded-full" />
-            )}
-          </button>
-        ))}
-      </div>
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-4 mt-4">
@@ -179,85 +161,26 @@ export default function ExplorePage() {
 
       {/* Content Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mt-6">
-        {/* Mentors Tab */}
-        {activeTab === "mentors" && (
-          filteredMentors.length > 0 ? (
-            filteredMentors.map((m) => (
-              <MentorCard
-                key={m.id}
-                mentor={{
-                  id: m.id,
-                  name: m.full_name,
-                  expertise: m.expertise.map((e) => e.name).join(", "),
-                  profile_picture: m.profile_picture,
-                  rating: m.rating || 0,
-                  tags: m.tags || [],
-                  price: parseFloat(m.hourly_rate),
-                }}
-              />
-            ))
-          ) : (
-            <div className="col-span-full py-20 text-center text-gray-500">
-               No mentors found matching your criteria.
-            </div>
-          )
+        {filteredMentors.length > 0 ? (
+          filteredMentors.map((m) => (
+            <MentorCard
+              key={m.id}
+              mentor={{
+                id: m.id,
+                name: m.full_name,
+                expertise: m.expertise.map((e) => e.name).join(", "),
+                profile_picture: m.profile_picture,
+                rating: m.rating || 0,
+                tags: m.tags || [],
+                price: parseFloat(m.hourly_rate),
+              }}
+            />
+          ))
+        ) : (
+          <div className="col-span-full py-20 text-center text-gray-500">
+             No mentors found matching your criteria.
+          </div>
         )}
-
-        {/* Courses Tab */}
-        {activeTab === "courses" &&
-          courses.map((course, i) => (
-            <div key={i} className="bg-white rounded-2xl overflow-hidden border border-gray-200 shadow-sm hover:shadow-md transition cursor-pointer">
-              <div className="w-full h-28 bg-gray-200" />
-              <div className="p-4">
-                <div className="flex justify-between items-start">
-                  <h3 className="font-semibold text-gray-900 text-base">{course.title}</h3>
-                  <div className="flex items-center gap-1 text-orange-500">
-                    <Star className="w-4 h-4 fill-current" />
-                    <span className="font-semibold text-sm">{course.rating}</span>
-                  </div>
-                </div>
-                <p className="text-gray-600 text-sm mt-0.5">by {course.mentor}</p>
-                <div className="flex flex-wrap gap-3 mt-3 text-sm text-gray-700">
-                  <div className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {course.duration}</div>
-                  <div className="flex items-center gap-1">📘 {course.lessons} lessons</div>
-                  <div className="flex items-center gap-1">🔥 {course.level}</div>
-                </div>
-                <p className="text-xs text-gray-500 mt-2">Updated {course.updated}</p>
-                <button 
-                  onClick={() => toast.success("Enrolling coming soon!")}
-                  className="mt-4 w-full py-2 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-xl transition"
-                >
-                  Enroll Now
-                </button>
-              </div>
-            </div>
-          ))}
-
-        {/* Group Sessions Tab */}
-        {activeTab === "groups" &&
-          groupSessions.map((session, i) => (
-            <div key={i} className="bg-white rounded-2xl overflow-hidden border border-gray-200 shadow-sm hover:shadow-md transition cursor-pointer">
-              <div className="w-full h-28 bg-purple-200" />
-              <div className="p-4">
-                <div className="flex justify-between items-start">
-                  <h3 className="font-semibold text-gray-900 text-base">{session.title}</h3>
-                  <span className="px-2 py-0.5 text-xs font-bold bg-purple-100 text-purple-700 rounded-full">Live</span>
-                </div>
-                <p className="text-gray-600 text-sm mt-0.5">with {session.mentor}</p>
-                <div className="flex items-center gap-2 mt-3 text-gray-700 text-sm"><Calendar className="w-4 h-4" /> {session.date}</div>
-                <div className="flex items-center gap-2 text-gray-700 text-sm">⏰ {session.time}</div>
-                <div className="flex justify-between items-center mt-4">
-                  <span className="text-lg font-bold text-purple-600">${session.price}</span>
-                  <button 
-                    onClick={() => toast.success("Live sessions joining coming soon!")}
-                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-xl transition"
-                  >
-                    Join Session
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
       </div>
     </AuthLayout>
   );

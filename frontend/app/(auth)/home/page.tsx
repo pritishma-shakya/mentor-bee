@@ -60,7 +60,7 @@ export default function HomePage() {
           setMentors(
             mentorsData.data.map((m: any) => ({
               ...m,
-              rating: m.rating || 4.8,
+              rating: m.rating || 0,
               tags: m.expertise.map((e: any) => e.name),
             }))
           );
@@ -71,10 +71,10 @@ export default function HomePage() {
         const sessionsData = await sessionsRes.json();
         if (Array.isArray(sessionsData)) setRealSessions(sessionsData);
 
-        // Fetch learning goals
-        const goalsRes = await fetch("http://localhost:5000/api/students/learning-goals", { credentials: "include" });
-        const goalsData = await goalsRes.json();
-        if (goalsData.success && goalsData.data) setLearningGoals(goalsData.data);
+        // // Fetch learning goals
+        // const goalsRes = await fetch("http://localhost:5000/api/students/learning-goals", { credentials: "include" });
+        // const goalsData = await goalsRes.json();
+        // if (goalsData.success && goalsData.data) setLearningGoals(goalsData.data);
 
         // Fetch summary/rewards
         const rewardsRes = await fetch("http://localhost:5000/api/students/rewards", { credentials: "include" });
@@ -148,7 +148,7 @@ export default function HomePage() {
         <div className="space-y-5 w-full">
           <Summary summary={summary} />
           <Rewards points={summary.points} />
-          <LearningGoals goals={learningGoals} setGoals={setLearningGoals} />
+          {/* <LearningGoals goals={learningGoals} setGoals={setLearningGoals} /> */}
         </div>
       </div>
     </AuthLayout>
@@ -171,7 +171,7 @@ function RecommendedMentors({ mentors, loading }: { mentors: Mentor[]; loading: 
               name: m.full_name, // required by MentorCard
               expertise: m.expertise.map((e) => e.name).join(", "), // **pass expertise string**
               profile_picture: m.profile_picture, // optional
-              rating: m.rating || 4.8,
+              rating: m.rating || 0,
               tags: m.tags || [],
               price: parseFloat(m.hourly_rate),
             }}

@@ -47,11 +47,12 @@ interface Post {
   tag?: string;
   images?: string[];
   trending?: boolean;
+  user_reaction?: "like" | "dislike" | null;
 }
 
 interface Contributor {
   name: string;
-  points: number;
+  profile_picture?: string;
 }
 
 export default function CommunityPage() {
@@ -117,16 +118,23 @@ export default function CommunityPage() {
       }
     };
 
+    const fetchContributors = async () => {
+      try {
+        const res = await fetch("http://localhost:5000/api/community/top-contributors", {
+          credentials: "include",
+        });
+        if (!res.ok) throw new Error("Failed to fetch top contributors");
+        const data = await res.json();
+        setTopContributors(data.data || []);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
     fetchUser();
     fetchPosts();
     fetchTags();
-
-    // Mock top contributors
-    setTopContributors([
-      { name: "Emma Thompson", points: 4990 },
-      { name: "Liam Chen", points: 4300 },
-      { name: "Sophia Martinez", points: 4100 },
-    ]);
+    fetchContributors();
   }, []);
 
   const handleImageUpload = (e: ChangeEvent<HTMLInputElement>) => {
@@ -217,46 +225,53 @@ export default function CommunityPage() {
 
   const handleLike = async (postId: string) => {
     try {
-      const res = await fetch(
-        `http://localhost:5000/api/community/posts/${postId}/react`,
-        {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ type: "like" }),
-        }
-      );
+      const res = await fetch(`http://localhost:5000/api/community/posts/${postId}/react`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "like" }),
+      });
       if (!res.ok) throw new Error("Failed to like post");
       const data = await res.json();
       setPosts(
         posts.map((p) =>
-          p.id === postId ? { ...p, likes: data.data.likes } : p
+          p.id === postId
+            ? {
+                ...p,
+                likes: data.data.likes,
+                dislikes: data.data.dislikes,
+                user_reaction: p.user_reaction === "like" ? null : "like",
+              }
+            : p
         )
       );
-      if (user) setUser({ ...user, points: (user.points || 0) + 1 });
-      toast.success("Post liked!");
+      toast.success(data.data.user_reaction === null ? "Reaction removed" : "Post liked!");
     } catch (err) {
       console.error(err);
-      toast.error("Failed to like post");
+      toast.error("Failed to react to post");
     }
   };
 
   const handleDislike = async (postId: string) => {
     try {
-      const res = await fetch(
-        `http://localhost:5000/api/community/posts/${postId}/react`,
-        {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ type: "dislike" }),
-        }
-      );
-      if (!res.ok) throw new Error("Failed to dislike post");
+      const res = await fetch(`http://localhost:5000/api/community/posts/${postId}/react`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "dislike" }),
+      });
+      if (!res.ok) throw new Error("Failed to react to post");
       const data = await res.json();
       setPosts(
         posts.map((p) =>
-          p.id === postId ? { ...p, dislikes: data.data.dislikes } : p
+          p.id === postId
+            ? {
+                ...p,
+                likes: data.data.likes,
+                dislikes: data.data.dislikes,
+                user_reaction: p.user_reaction === "dislike" ? null : "dislike",
+              }
+            : p
         )
       );
       toast.success("Reaction updated");
@@ -343,8 +358,12 @@ export default function CommunityPage() {
             <div className="bg-white rounded-lg shadow border border-gray-100 p-4 space-y-3 hover:shadow-md transition">
               {/* Header */}
               <div className="flex items-start gap-3">
-                <div className="w-9 h-9 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-semibold text-sm">
-                  {user?.name?.charAt(0) || "U"}
+                <div className="w-9 h-9 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-semibold text-sm overflow-hidden">
+                  {user?.profile_picture ? (
+                    <img src={user.profile_picture} alt={user.name} className="w-full h-full object-cover" />
+                  ) : (
+                    user?.name?.charAt(0)
+                  )}
                 </div>
                 <div className="flex-1">
                   <p className="font-semibold text-gray-900 text-sm">{user?.name}</p>
@@ -478,7 +497,16 @@ export default function CommunityPage() {
           <div className="space-y-4">
             {posts.length > 0 ? (
               posts
-                .filter((p) => selectedTag === "" || p.tag === selectedTag)
+                .filter((p) => {
+                  const matchTag = selectedTag === "" || p.tag === selectedTag;
+                  const searchLower = searchQuery.toLowerCase();
+                  const matchSearch = 
+                    searchQuery === "" || 
+                    p.content.toLowerCase().includes(searchLower) ||
+                    p.author.toLowerCase().includes(searchLower) ||
+                    (p.tag && p.tag.toLowerCase().includes(searchLower));
+                  return matchTag && matchSearch;
+                })
                 .map((p) => (
                   <PostCard
                     key={p.id}
@@ -511,8 +539,12 @@ export default function CommunityPage() {
                 <div key={i} className="flex items-center gap-3 p-2 rounded hover:bg-gray-50">
                   <div className="flex items-center gap-3">
                     <div className="relative">
-                      <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-700 font-semibold">
-                        {c.name.charAt(0)}
+                      <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-semibold overflow-hidden text-sm">
+                        {c.profile_picture ? (
+                          <img src={c.profile_picture} alt={c.name} className="w-full h-full object-cover" />
+                        ) : (
+                          c.name.charAt(0)
+                        )}
                       </div>
                       {i < 3 && (
                         <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-500 flex items-center justify-center">
@@ -522,7 +554,6 @@ export default function CommunityPage() {
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-900">{c.name}</p>
-                      <p className="text-xs text-gray-500">{c.points.toLocaleString()} points</p>
                     </div>
                   </div>
                 </div>
@@ -584,26 +615,11 @@ function formatTime(timestamp: string) {
 }
 
 function PostCard({ post, user, onLike, onDislike, onAddComment }: PostCardProps) {
-  const [isLiked, setIsLiked] = useState(false);
-  const [isDisliked, setIsDisliked] = useState(false);
   const [showCommentInput, setShowCommentInput] = useState(false);
   const [newComment, setNewComment] = useState("");
 
-  const handleLike = () => {
-    if (!isLiked) {
-      onLike(post.id);
-      setIsLiked(true);
-      if (isDisliked) setIsDisliked(false);
-    }
-  };
-
-  const handleDislike = () => {
-    if (!isDisliked) {
-      onDislike(post.id);
-      setIsDisliked(true);
-      if (isLiked) setIsLiked(false);
-    }
-  };
+  const isLiked = post.user_reaction === "like";
+  const isDisliked = post.user_reaction === "dislike";
 
   const handleCommentSubmit = () => {
     if (!newComment.trim()) return;
@@ -680,13 +696,13 @@ function PostCard({ post, user, onLike, onDislike, onAddComment }: PostCardProps
         {/* Like */}
         <div className="flex items-center gap-1.5">
           <button
-            onClick={handleLike}
+            onClick={() => onLike(post.id)}
             className={`p-1 rounded-full transition-colors ${isLiked
               ? "text-green-600 bg-green-50"
               : "text-gray-500 hover:text-green-600 hover:bg-green-50"
               }`}
           >
-            <ThumbsUp className="w-4 h-4" />
+          <ThumbsUp className="w-4 h-4" />
           </button>
           <span className="text-xs text-gray-600">{post.likes}</span>
         </div>
@@ -694,7 +710,7 @@ function PostCard({ post, user, onLike, onDislike, onAddComment }: PostCardProps
         {/* Dislike */}
         <div className="flex items-center gap-1.5">
           <button
-            onClick={handleDislike}
+            onClick={() => onDislike(post.id)}
             className={`p-1 rounded-full transition-colors ${isDisliked
               ? "text-red-600 bg-red-50"
               : "text-gray-500 hover:text-red-600 hover:bg-red-50"

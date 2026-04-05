@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Toaster, toast } from "react-hot-toast";
-import { User, Edit, X } from "lucide-react";
+import { User, Edit, X, Phone, FileText, Award, CheckCircle } from "lucide-react";
 
 interface Expertise {
   id: string;
@@ -18,6 +18,16 @@ export default function MentorSetupPage() {
   const [experience, setExperience] = useState("");
   const [location, setLocation] = useState("");
   const [responseTime, setResponseTime] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [citizenshipId, setCitizenshipId] = useState<File | null>(null);
+  const [bachelorsDegree, setBachelorsDegree] = useState<File | null>(null);
+  const [mastersDegree, setMastersDegree] = useState<File | null>(null);
+  const [experienceCertificate, setExperienceCertificate] = useState<File | null>(null);
+  const [plusTwoTranscript, setPlusTwoTranscript] = useState<File | null>(null);
+  const [phdDegree, setPhdDegree] = useState<File | null>(null);
+  const [highestDegree, setHighestDegree] = useState("+2"); // Default
+  const [customExpertiseInput, setCustomExpertiseInput] = useState("");
+  const [customExpertiseList, setCustomExpertiseList] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
   // Fetch all available expertise options
@@ -47,8 +57,13 @@ export default function MentorSetupPage() {
   };
 
   const handleSubmit = async () => {
-    if (!bio || expertiseList.length === 0) {
+    if (!bio || expertiseList.length === 0 || !phoneNumber) {
       toast.error("Please fill all required fields");
+      return;
+    }
+
+    if (!citizenshipId || !bachelorsDegree || !experienceCertificate) {
+      toast.error("Please upload all required documents (ID, Bachelors, Experience)");
       return;
     }
 
@@ -61,11 +76,19 @@ export default function MentorSetupPage() {
       formData.append("location", location);
       formData.append("responseTime", responseTime);
       formData.append("hourlyRate", hourlyRate ? hourlyRate : "");
+      formData.append("expertiselist", JSON.stringify(expertiseList));
+      formData.append("phone_number", phoneNumber);
+      formData.append("highest_degree", highestDegree);
       expertiseList.forEach((e) => formData.append("expertiseIds[]", e.id));
+      customExpertiseList.forEach((name) => formData.append("customExpertise[]", name));
 
-      if (profilePicture) {
-        formData.append("profilePicture", profilePicture);
-      }
+      if (profilePicture) formData.append("profilePicture", profilePicture);
+      if (citizenshipId) formData.append("citizenshipId", citizenshipId);
+      if (bachelorsDegree) formData.append("bachelorsDegree", bachelorsDegree);
+      if (mastersDegree) formData.append("mastersDegree", mastersDegree);
+      if (experienceCertificate) formData.append("experienceCertificate", experienceCertificate);
+      if (plusTwoTranscript) formData.append("plusTwoTranscript", plusTwoTranscript);
+      if (phdDegree) formData.append("phdDegree", phdDegree);
 
       const res = await fetch("http://localhost:5000/api/mentors/setup", {
         method: "POST",
@@ -92,141 +115,282 @@ export default function MentorSetupPage() {
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <Toaster position="top-right" />
-      <main className="w-full max-w-2xl bg-white rounded-xl p-6 shadow-md border border-gray-100 space-y-4 text-sm">
-        <header className="mb-4">
-          <h1 className="text-lg font-semibold text-gray-900">Set Up Your Mentor Profile</h1>
-          <p className="text-gray-600 mt-1">Complete your profile to start mentoring students.</p>
+      <main className="w-full max-w-2xl bg-white rounded-2xl p-10 shadow-sm border border-gray-100 space-y-8">
+        <header className="space-y-2 border-b pb-6">
+          <h1 className="text-3xl font-black text-gray-950">Mentor Profile Setup</h1>
+          <p className="text-gray-600 font-medium">Provide your details to join our community of expert mentors.</p>
         </header>
 
-        {/* Profile Picture */}
-        <div className="flex items-center gap-3">
-          <div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden relative">
-            {profilePicture ? (
-              <img
-                src={URL.createObjectURL(profilePicture)}
-                alt="Profile"
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <User className="w-8 h-8 text-gray-500" />
-            )}
-            <label className="absolute bottom-0 right-0 bg-orange-500 text-white rounded-full p-1 cursor-pointer hover:bg-orange-600">
-              <Edit className="w-3 h-3" />
-              <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
-            </label>
+        <div className="space-y-8">
+          {/* Profile Picture */}
+          <div className="flex flex-col items-center gap-4 py-6 bg-gray-50/50 rounded-2xl border border-dashed border-gray-200">
+            <div className="w-24 h-24 rounded-full bg-white ring-4 ring-orange-100 flex items-center justify-center overflow-hidden relative shadow-md group">
+              {profilePicture ? (
+                <img
+                  src={URL.createObjectURL(profilePicture)}
+                  alt="Profile"
+                  className="w-full h-full object-cover transition duration-300 group-hover:scale-110"
+                />
+              ) : (
+                <User className="w-12 h-12 text-gray-300" />
+              )}
+              <label className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                <Edit className="text-white w-6 h-6" />
+                <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
+              </label>
+            </div>
+            <span className="text-sm font-bold text-gray-900 uppercase tracking-widest">Profile Photo</span>
           </div>
-          <p className="text-gray-700">Upload a profile picture</p>
-        </div>
 
-        {/* Bio */}
-        <div>
-          <label className="block text-gray-700 mb-1">Bio</label>
-          <textarea
-            value={bio}
-            onChange={(e) => setBio(e.target.value)}
-            placeholder="Tell us about yourself"
-            className="w-full border border-gray-300 placeholder-gray-400 text-gray-700 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none"
-            rows={3}
-          />
-        </div>
+          {/* Basic Info */}
+          <div className="space-y-5">
+            <div>
+              <label className="block text-sm font-bold text-gray-950 mb-1.5 uppercase tracking-wide">Bio</label>
+              <textarea
+                value={bio}
+                onChange={(e) => setBio(e.target.value)}
+                placeholder="Tell students about your expertise and experience..."
+                className="w-full border-2 border-gray-200 rounded-xl p-4 focus:ring-4 focus:ring-orange-100 focus:border-orange-500 outline-none min-h-[120px] resize-none text-gray-950 placeholder:text-gray-500 font-medium transition-all"
+              />
+            </div>
 
-        {/* Expertise */}
-        <div>
-          <label className="block text-gray-700 mb-1">Expertise</label>
-          <select
-            onChange={(e) => {
-              const skill = allExpertise.find((s) => s.id === e.target.value);
-              if (skill) handleAddExpertise(skill);
-              e.target.value = "";
-            }}
-            className="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-orange-400 text-gray-700"
-            defaultValue=""
-          >
-            <option value="" disabled>
-              Select expertise...
-            </option>
-            {allExpertise
-              .filter((s) => !expertiseList.find((e) => e.id === s.id))
-              .map((skill) => (
-                <option key={skill.id} value={skill.id}>
-                  {skill.name}
-                </option>
-              ))}
-          </select>
-
-          <div className="flex flex-wrap gap-2 mt-2">
-            {expertiseList.map((skill) => (
-              <div
-                key={skill.id}
-                className="flex items-center bg-orange-100 text-orange-800 px-2 py-1 rounded-full text-sm"
-              >
-                {skill.name}
-                <X
-                  className="ml-1 cursor-pointer"
-                  onClick={() => handleRemoveExpertise(skill.id)}
-                  size={14}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div>
+                <label className="block text-sm font-bold text-gray-950 mb-1.5 uppercase tracking-wide">Phone Number</label>
+                <input
+                  type="tel"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  placeholder="+977 98XXXXXXXX"
+                  className="w-full border-2 border-gray-200 rounded-xl p-3.5 focus:ring-4 focus:ring-orange-100 focus:border-orange-500 outline-none text-gray-950 placeholder:text-gray-500 font-bold transition-all"
                 />
               </div>
-            ))}
+              <div>
+                <label className="block text-sm font-bold text-gray-950 mb-1.5 uppercase tracking-wide">Location</label>
+                <input
+                  type="text"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  placeholder="City, Country"
+                  className="w-full border-2 border-gray-200 rounded-xl p-3.5 focus:ring-4 focus:ring-orange-100 focus:border-orange-500 outline-none text-gray-950 placeholder:text-gray-500 font-bold transition-all"
+                />
+              </div>
+            </div>
           </div>
-          <p className="text-gray-500 text-xs mt-1">Click to add expertise as tags</p>
+
+          <div className="h-px bg-gray-100" />
+
+          {/* Professional Details */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div>
+              <label className="block text-sm font-bold text-gray-950 mb-1.5 uppercase tracking-wide">Hourly Rate (Rs.)</label>
+              <input
+                type="number"
+                value={hourlyRate}
+                onChange={(e) => setHourlyRate(e.target.value)}
+                placeholder="1500"
+                className="w-full border-2 border-gray-200 rounded-xl p-3.5 focus:ring-4 focus:ring-orange-100 focus:border-orange-500 outline-none text-gray-950 placeholder:text-gray-500 font-bold transition-all"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-bold text-gray-950 mb-1.5 uppercase tracking-wide">Experience</label>
+              <input
+                type="text"
+                value={experience}
+                onChange={(e) => setExperience(e.target.value)}
+                placeholder="e.g. 5 Years"
+                className="w-full border-2 border-gray-200 rounded-xl p-3.5 focus:ring-4 focus:ring-orange-100 focus:border-orange-500 outline-none text-gray-950 placeholder:text-gray-500 font-bold transition-all"
+              />
+            </div>
+          </div>
+
+          {/* Expertise */}
+          <div className="space-y-4">
+            <label className="block text-sm font-bold text-gray-950 uppercase tracking-wide">Areas of Expertise</label>
+            <div className="flex flex-col gap-3">
+              <select
+                onChange={(e) => {
+                  const skill = allExpertise.find((s) => s.id === e.target.value);
+                  if (skill) handleAddExpertise(skill);
+                  e.target.value = "";
+                }}
+                className="w-full border-2 border-gray-200 rounded-xl p-3.5 outline-none focus:ring-4 focus:ring-orange-100 focus:border-orange-500 text-gray-950 font-bold bg-gray-50/50"
+                defaultValue=""
+              >
+                <option value="" disabled>Select from suggestions...</option>
+                {allExpertise
+                  .filter((s) => !expertiseList.find((e) => e.id === s.id))
+                  .map((skill) => (
+                    <option key={skill.id} value={skill.id}>{skill.name}</option>
+                  ))}
+              </select>
+              
+              <div className="flex gap-2">
+                <input 
+                  type="text" 
+                  value={customExpertiseInput}
+                  onChange={(e) => setCustomExpertiseInput(e.target.value)}
+                  placeholder="Or add a new custom expertise..."
+                  className="flex-1 border-2 border-gray-200 rounded-xl px-4 py-3 focus:ring-4 focus:ring-orange-100 focus:border-orange-500 outline-none text-gray-950 placeholder:text-gray-500 font-bold transition-all shadow-sm"
+                />
+                <button 
+                  type="button"
+                  onClick={() => {
+                    if (customExpertiseInput.trim()) {
+                      setCustomExpertiseList([...customExpertiseList, customExpertiseInput.trim()]);
+                      setCustomExpertiseInput("");
+                    }
+                  }}
+                  className="px-6 bg-gray-900 text-white rounded-xl font-black hover:bg-black transition-all active:scale-95 shadow-lg shadow-gray-200"
+                >
+                  ADD
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2.5 pt-1">
+              {expertiseList.map((skill) => (
+                <span key={skill.id} className="bg-orange-600 text-white px-4 py-2 rounded-xl text-sm font-black flex items-center gap-2 shadow-sm">
+                  {skill.name}
+                  <X size={16} className="cursor-pointer hover:scale-125 transition-transform" onClick={() => handleRemoveExpertise(skill.id)} />
+                </span>
+              ))}
+              {customExpertiseList.map((name, i) => (
+                <span key={i} className="bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-black flex items-center gap-2 shadow-sm">
+                  {name}
+                  <X size={16} className="cursor-pointer hover:scale-125 transition-transform" onClick={() => setCustomExpertiseList(customExpertiseList.filter((_, idx) => idx !== i))} />
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="h-px bg-gray-100" />
+
+          {/* Education Verification */}
+          <div className="space-y-6 bg-gray-50/50 p-8 rounded-3xl border-2 border-gray-100 shadow-inner">
+            <header className="flex items-center justify-between gap-4 border-b border-gray-200 pb-4 mb-2">
+              <div className="flex items-center gap-2">
+                <Award className="w-6 h-6 text-orange-600" />
+                <h3 className="font-black text-gray-950 text-lg uppercase">Academic Verification</h3>
+              </div>
+            </header>
+
+            <div className="space-y-6">
+              <div>
+                <label className="block text-xs font-black text-gray-700 mb-2 uppercase tracking-widest">Highest Academic Degree</label>
+                <select
+                  value={highestDegree}
+                  onChange={(e) => setHighestDegree(e.target.value)}
+                  className="w-full border-2 border-gray-200 rounded-xl p-3.5 focus:ring-4 focus:ring-orange-100 focus:border-orange-500 outline-none text-gray-950 font-black bg-white"
+                >
+                  <option value="+2">+2 (High School)</option>
+                  <option value="Bachelors">Bachelors Degree</option>
+                  <option value="Masters">Masters Degree</option>
+                  <option value="PhD">PhD / Doctorate</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 gap-6 pt-2">
+                <FileUploadField label="National ID / Citizenship" onChange={setCitizenshipId} file={citizenshipId} required />
+                
+                {highestDegree === "+2" && (
+                    <FileUploadField label="+2 Transcript" onChange={setPlusTwoTranscript} file={plusTwoTranscript} required />
+                )}
+                
+                {(highestDegree === "Bachelors" || highestDegree === "Masters" || highestDegree === "PhD") && (
+                    <FileUploadField label="Bachelors Degree" onChange={setBachelorsDegree} file={bachelorsDegree} required />
+                )}
+                
+                {(highestDegree === "Masters" || highestDegree === "PhD") && (
+                    <FileUploadField label="Masters Degree" onChange={setMastersDegree} file={mastersDegree} required />
+                )}
+                
+                {highestDegree === "PhD" && (
+                    <FileUploadField label="PhD Certificate" onChange={setPhdDegree} file={phdDegree} required />
+                )}
+                
+                <FileUploadField label="Experience Certificate" onChange={setExperienceCertificate} file={experienceCertificate} required />
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* Other Fields */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-gray-700 mb-1">Hourly Rate (Rs.)</label>
-            <input
-              type="number"
-              value={hourlyRate}
-              onChange={(e) => setHourlyRate(e.target.value)}
-              placeholder="1500"
-              className="w-full border border-gray-300 text-gray-700 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-orange-400"
-            />
-          </div>
-          <div>
-            <label className="block text-gray-700 mb-1">Experience</label>
-            <input
-              type="text"
-              value={experience}
-              onChange={(e) => setExperience(e.target.value)}
-              placeholder="5 years"
-              className="w-full border border-gray-300 placeholder-gray-400 text-gray-700 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-orange-400"
-            />
-          </div>
-          <div>
-            <label className="block text-gray-700 mb-1">Location</label>
-            <input
-              type="text"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="City, Country"
-              className="w-full border border-gray-300 placeholder-gray-400 text-gray-700 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-orange-400"
-            />
-          </div>
-          <div>
-            <label className="block text-gray-700 mb-1">Response Time</label>
-            <input
-              type="text"
-              value={responseTime}
-              onChange={(e) => setResponseTime(e.target.value)}
-              placeholder="Within 24 hours"
-              className="w-full border border-gray-300 placeholder-gray-400 text-gray-700 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-orange-400"
-            />
-          </div>
-        </div>
-
-        {/* Submit Button */}
-        <div className="text-right">
-          <button
-            onClick={handleSubmit}
-            disabled={loading}
-            className="px-6 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition disabled:opacity-50"
-          >
-            {loading ? "Saving..." : "Complete Setup"}
-          </button>
-        </div>
+        <button
+          onClick={handleSubmit}
+          disabled={loading}
+          className="w-full py-5 bg-orange-600 text-white font-black text-xl rounded-2xl hover:bg-orange-700 transition-all hover:scale-[1.02] active:scale-100 disabled:opacity-50 shadow-2xl shadow-orange-100 flex items-center justify-center gap-3"
+        >
+          {loading ? (
+            <>
+              <div className="w-6 h-6 border-4 border-white/30 border-t-white rounded-full animate-spin" />
+              Completing Profile...
+            </>
+          ) : "COMPLETE SETUP"}
+        </button>
       </main>
+    </div>
+  );
+}
+
+function FileUploadField({ 
+  label, 
+  onChange, 
+  file, 
+  required = false 
+}: { 
+  label: string; 
+  onChange: (f: File | null) => void; 
+  file: File | null;
+  required?: boolean;
+}) {
+  return (
+    <div className="space-y-2">
+      <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] flex items-center justify-between">
+        {label}
+        {required && <span className="text-orange-600 font-bold normal-case tracking-normal">Mandatory</span>}
+      </label>
+      <div className={`relative group transition-all`}>
+        <input
+          type="file"
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+          accept=".pdf,image/*"
+          onChange={(e) => onChange(e.target.files?.[0] || null)}
+        />
+        <div className={`
+          flex items-center gap-4 p-4 rounded-2xl border-2 border-dashed transition-all
+          ${file 
+            ? 'border-orange-500 bg-orange-50/30' 
+            : 'border-gray-200 bg-white group-hover:border-orange-400 group-hover:bg-orange-50/10'
+          }
+        `}>
+          <div className={`
+            w-12 h-12 rounded-xl flex-shrink-0 flex items-center justify-center overflow-hidden
+            ${file ? 'bg-orange-100' : 'bg-gray-100'}
+          `}>
+             {file && file.type.startsWith('image/') ? (
+               <img src={URL.createObjectURL(file)} alt="Preview" className="w-full h-full object-cover" />
+             ) : (
+               file ? <Award className="w-6 h-6 text-orange-600" /> : <Edit className="w-6 h-6 text-gray-400" />
+             )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <span className="block text-sm font-black text-gray-950 truncate">
+              {file ? file.name : "Click to upload document"}
+            </span>
+            <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+              {file ? (file.size / (1024 * 1024)).toFixed(2) + " MB" : "Images or PDF only"}
+            </span>
+          </div>
+          {file && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); onChange(null); }}
+              className="p-2 hover:bg-orange-200 rounded-xl transition-colors z-20 text-orange-700"
+            >
+              <X size={18} strokeWidth={3} />
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

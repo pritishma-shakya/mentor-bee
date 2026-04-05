@@ -22,15 +22,6 @@ function PaymentSuccessContent() {
             }
 
             try {
-                // Decode eSewa base64 payload
-                const decodedData = JSON.parse(atob(dataParam));
-
-                if (decodedData.status !== "COMPLETE") {
-                    setStatus("error");
-                    setErrorMessage("Payment was not marked as complete by eSewa.");
-                    return;
-                }
-
                 // Retrieve pending booking data
                 const pendingBookingStr = localStorage.getItem("pending_booking");
                 if (!pendingBookingStr) {
@@ -41,12 +32,21 @@ function PaymentSuccessContent() {
 
                 const payload = JSON.parse(pendingBookingStr);
                 payload.payment_status = "Paid"; // Force status to Paid on success
-                
-                // Pass eSewa transaction details so backend can record the revenue split
+
+                // Decode eSewa base64 payload
+                const decodedData = JSON.parse(atob(dataParam));
+
+                if (decodedData.status !== "COMPLETE") {
+                    setStatus("error");
+                    setErrorMessage("Payment was not marked as complete by eSewa.");
+                    return;
+                }
+
+                // Pass eSewa transaction details
                 payload.transaction_uuid = decodedData.transaction_uuid || null;
                 payload.total_amount = decodedData.total_amount
-                  ? parseFloat(decodedData.total_amount)
-                  : null;
+                    ? parseFloat(decodedData.total_amount)
+                    : null;
 
                 // Book the session
                 const bookRes = await fetch("http://localhost:5000/api/sessions", {

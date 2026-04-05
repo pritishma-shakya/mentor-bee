@@ -8,6 +8,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 router.get("/posts", authenticate, communityController.getPosts);
 router.get("/tags", authenticate, communityController.getTags);
+router.get("/top-contributors", authenticate, communityController.getTopContributors);
 
 router.post("/posts", authenticate, upload.array("images"), communityController.createPost);
 router.post("/posts/:postId/react", authenticate, communityController.reactToPost);

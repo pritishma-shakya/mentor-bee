@@ -8,6 +8,7 @@ import {
   requestReschedule,
   respondToRequest,
   markSessionCashPaid,
+  getSessionById,
 } from "../controllers/sessionController";
 import { authenticate } from "../middlewares/authMiddleware";
 
@@ -21,6 +22,9 @@ router.get("/mentor", authenticate, getMentorSessions);
 
 // Get sessions for student
 router.get("/student", authenticate, getStudentSessions);
+
+// Get single session
+router.get("/:sessionId", authenticate, getSessionById);
 
 // Update session status
 router.patch("/:sessionId/status", authenticate, updateSessionStatus);

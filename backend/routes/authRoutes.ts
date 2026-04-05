@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { signup, login, logout, getProfile, updateAccount, changePassword, updatePreferences } from "../controllers/authController";
+import { signup, login, logout, getProfile, updateAccount, changePassword } from "../controllers/authController";
 import { authenticate } from "../middlewares/authMiddleware";
 import { upload } from "../middlewares/uploadMiddleware";
 import { config } from "../config";
@@ -15,7 +15,6 @@ router.post("/logout", authenticate, logout);
 router.get("/profile", authenticate, getProfile);
 router.put("/update-account", authenticate, upload.single("profilePicture"), updateAccount);
 router.put("/change-password", authenticate, changePassword);
-router.put("/update-preferences", authenticate, updatePreferences);
 
 /* ===== GOOGLE AUTH ===== */
 router.get("/google", (req, res) => {

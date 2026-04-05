@@ -112,6 +112,32 @@ export default function MentorScheduleManager() {
     return targetDate < nepalNow;
   };
 
+  // Normalise any time string to 24-hour HH:MM for comparison
+  const normalizeTimeTo24 = (time: string): string => {
+    const t = time.trim().toLowerCase();
+    if (t.includes('am') || t.includes('pm')) {
+      const match = t.match(/(\d+):(\d+)\s*(am|pm)/);
+      if (!match) return t;
+      let hours = parseInt(match[1]);
+      const minutes = parseInt(match[2]);
+      const modifier = match[3];
+      if (modifier === 'pm' && hours < 12) hours += 12;
+      if (modifier === 'am' && hours === 12) hours = 0;
+      return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    }
+    // Already 24-hour (e.g. "14:00" or "14:00:00")
+    const parts = t.split(':');
+    return `${String(parseInt(parts[0])).padStart(2, '0')}:${String(parseInt(parts[1] || '0')).padStart(2, '0')}`;
+  };
+
+  // Returns true if a date has at least one active (non-cancelled/rejected) session
+  const isDateFullyBooked = (calendarDate: string) => {
+    return sessions.some(s =>
+      toNepaliDate(s.date) === calendarDate &&
+      ["Pending", "Accepted", "Started", "Completed"].includes(s.status)
+    );
+  };
+
   // Month navigation
   const handlePrevMonth = () =>
     setCurrentMonth(prev => new Date(prev.getFullYear(), prev.getMonth() - 1));
@@ -304,12 +330,12 @@ export default function MentorScheduleManager() {
                       onClick={() => handleDateClick(day)}
                       disabled={isPastDate}
                       className={`h-10 rounded-xl text-sm font-bold transition-all relative ${
-                        isSelected 
-                          ? "bg-orange-600 text-white shadow-lg shadow-orange-100 scale-105 z-10" 
-                          : hasAvailability 
-                            ? "bg-green-50 text-green-700 border border-green-100 hover:bg-green-100" 
-                            : isPastDate 
-                              ? "text-gray-300 cursor-not-allowed" 
+                        isSelected
+                          ? "bg-orange-600 text-white shadow-lg shadow-orange-100 scale-105 z-10"
+                          : hasAvailability
+                            ? "bg-green-50 text-green-700 border border-green-100 hover:bg-green-100"
+                            : isPastDate
+                              ? "text-gray-300 cursor-not-allowed"
                               : "hover:bg-orange-50 text-gray-700 hover:text-orange-600 border border-transparent hover:border-orange-100"
                       }`}
                     >
@@ -342,7 +368,7 @@ export default function MentorScheduleManager() {
                     const isPast = isPastSlot(selectedDate!, time);
                     const booking = sessions.find(s =>
                       toNepaliDate(s.date) === selectedDate &&
-                      s.time === time &&
+                      normalizeTimeTo24(s.time) === normalizeTimeTo24(time) &&
                       (s.status === "Pending" || s.status === "Accepted" || s.status === "Started" || s.status === "Completed")
                     );
 
@@ -356,21 +382,18 @@ export default function MentorScheduleManager() {
                         key={time}
                         onClick={() => !isDisabled && toggleTimeSlot(time)}
                         disabled={isDisabled}
+                        title={booking ? `Booked by ${booking.student_name || "a student"}` : undefined}
                         className={`py-3 rounded-xl text-xs font-bold transition-all border relative ${
                           (rescheduleSessionId ? isSelectedForReschedule : isSelectedForAvailability)
                             ? "bg-orange-600 text-white border-orange-600 shadow-md scale-[1.02]"
-                            : isDisabled
-                              ? "bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed"
-                              : "bg-white text-gray-700 border-gray-200 hover:border-orange-200 hover:bg-orange-50/50"
+                            : !!booking
+                              ? "bg-red-50 text-red-300 border-red-100 cursor-not-allowed"
+                              : isDisabled
+                                ? "bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed"
+                                : "bg-white text-gray-700 border-gray-200 hover:border-orange-200 hover:bg-orange-50/50"
                         }`}
                       >
                         {time}
-                        {booking && (
-                          <div className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
-                          </div>
-                        )}
                       </button>
                     );
                   })}

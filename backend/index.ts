@@ -22,11 +22,17 @@ import promoCodeRoutes from "./routes/promoCodeRoutes";
 // Socket
 import { initSocket } from "./socket";
 import { startReminderService } from "./utils/reminderService";
+import { pgPool } from "./config/database";
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+// Ensure schema is up to date (Migration)
+pgPool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS points INTEGER DEFAULT 0").catch(err => {
+  console.error("Migration error (points column):", err);
+});
 
 /* ================= GLOBAL MIDDLEWARE ================= */
 app.use(express.json());

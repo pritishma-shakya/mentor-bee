@@ -25,6 +25,14 @@ interface MentorRequest {
   expertise?: string[];
   profile_picture?: string;
   status: "pending" | "accepted" | "rejected" | "suspended";
+  citizenship_id_url?: string;
+  bachelors_degree_url?: string;
+  masters_degree_url?: string;
+  plus_two_url?: string;
+  phd_url?: string;
+  experience_certificate_url?: string;
+  highest_degree?: string;
+  phone_number?: string;
 }
 
 export default function AdminApprovalsPage() {
@@ -114,16 +122,18 @@ export default function AdminApprovalsPage() {
   return (
     <AuthLayout
       header={{
-        title: "Mentor Approvals",
-        subtitle: "Approve mentor requests and manage users",
+        title: "Mentor Management",
+        subtitle: "Review applications and manage mentor accounts",
         user: admin,
       }}
     >
       <Toaster position="top-right" />
 
-      <div className="mt-5 flex flex-col gap-6">
+      <div className="mt-6 space-y-4">
         {requests.length === 0 && (
-          <p className="text-gray-500 text-center py-6">No mentor requests found.</p>
+          <div className="bg-white rounded-xl p-12 text-center border border-gray-100 shadow-sm">
+            <p className="text-gray-500 font-medium">No pending mentor requests found.</p>
+          </div>
         )}
 
         {requests.map((r) => {
@@ -133,12 +143,12 @@ export default function AdminApprovalsPage() {
           return (
             <div
               key={r.id}
-              className="bg-white rounded-2xl shadow-md p-6 border border-gray-100 hover:shadow-xl transition-shadow duration-300 w-full"
+              className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden"
             >
               {/* Summary Row */}
-              <div className="flex items-center justify-between pb-4">
-                <div className="flex items-center gap-4 flex-1">
-                  <div className="w-14 h-14 rounded-full flex items-center justify-center bg-orange-100 text-orange-600 font-bold text-xl overflow-hidden">
+              <div className="p-4 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center overflow-hidden flex-shrink-0 text-orange-600 font-bold">
                     {r.profile_picture ? (
                       <img
                         src={r.profile_picture}
@@ -149,14 +159,21 @@ export default function AdminApprovalsPage() {
                       r.full_name ? r.full_name[0].toUpperCase() : "?"
                     )}
                   </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-gray-900 text-lg">{r.full_name || "N/A"}</h3>
-                    <p className="text-sm text-gray-500 mt-0.5">{r.email || "N/A"}</p>
+                  <div>
+                    <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                      {r.full_name || "N/A"}
+                      {r.highest_degree && (
+                        <span className="text-[10px] bg-orange-100 text-orange-700 px-2 py-0.5 rounded font-bold uppercase">
+                          {r.highest_degree}
+                        </span>
+                      )}
+                    </h3>
+                    <p className="text-sm text-gray-500">{r.email || "N/A"}</p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-4">
-                  <span className={`px-3 py-1 rounded-full text-xs font-semibold ${statusColors[r.status]}`}>
+                <div className="flex items-center gap-3 self-end md:self-auto">
+                  <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[r.status]}`}>
                     {r.status.charAt(0).toUpperCase() + r.status.slice(1)}
                   </span>
 
@@ -165,17 +182,16 @@ export default function AdminApprovalsPage() {
                       <button
                         onClick={() => handleAction(r.id, "accept")}
                         disabled={isLoading}
-                        className="flex items-center gap-1.5 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-xl text-sm font-medium transition-all duration-200 disabled:opacity-50"
+                        className="px-4 py-2 bg-gray-900 hover:bg-black text-white rounded-lg text-sm font-medium transition disabled:opacity-50 flex items-center gap-2"
                       >
-                        {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+                        {isLoading && <Loader2 className="h-3 w-3 animate-spin" />}
                         Approve
                       </button>
                       <button
                         onClick={() => handleAction(r.id, "reject")}
                         disabled={isLoading}
-                        className="flex items-center gap-1.5 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-xl text-sm font-medium transition-all duration-200 disabled:opacity-50"
+                        className="px-4 py-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-lg text-sm font-medium transition disabled:opacity-50"
                       >
-                        {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
                         Reject
                       </button>
                     </div>
@@ -185,58 +201,123 @@ export default function AdminApprovalsPage() {
                     <button
                       onClick={() => handleAction(r.id, "suspend")}
                       disabled={isLoading}
-                      className="flex items-center gap-1.5 px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-xl text-sm font-medium transition-all duration-200 disabled:opacity-50"
+                      className="px-4 py-2 bg-gray-100 hover:bg-red-50 hover:text-red-600 text-gray-600 rounded-lg text-sm font-medium transition disabled:opacity-50"
                     >
-                      {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
                       Suspend
                     </button>
                   )}
 
                   <button
                     onClick={() => toggleExpand(r.id)}
-                    className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-400"
                   >
-                    {expanded ? <ChevronDown className="h-5 w-5 text-gray-600" /> : <ChevronRight className="h-5 w-5 text-gray-600" />}
+                    {expanded ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
                   </button>
                 </div>
               </div>
 
-              {/* Expandable Details */}
-              <div className={`transition-all duration-300 ease-in-out overflow-hidden ${expanded ? "max-h-96 opacity-100" : "max-h-0 opacity-0"}`}>
-                <div className="border-t border-gray-200 pt-5 grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-gray-700">
-                  <div className="space-y-3">
-                    <p>
-                      <span className="font-medium text-gray-800">Bio:</span>
-                      <br />
-                      {r.bio || "Not provided"}
-                    </p>
-                    <p>
-                      <span className="font-medium text-gray-800">Expertise:</span>
-                      <br />
-                      {r.expertise?.length ? r.expertise.join(" • ") : "None listed"}
-                    </p>
-                  </div>
+              {/* Details Section */}
+              {expanded && (
+                <div className="border-t border-gray-100 bg-gray-50/30 p-6 space-y-8">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    {/* Basic Info */}
+                    <div className="space-y-4">
+                      <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Profile Information</h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <p className="text-xs text-gray-500 font-medium mb-1">Expertise</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {r.expertise?.length ? r.expertise.map((exp, i) => (
+                              <span key={i} className="bg-white border border-gray-200 px-2 py-0.5 rounded text-xs text-gray-700">
+                                {exp}
+                              </span>
+                            )) : "None"}
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 font-medium mb-1">Hourly Rate</p>
+                          <p className="font-semibold text-gray-900">Rs. {r.hourly_rate ?? "N/A"}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 font-medium mb-1">Experience</p>
+                          <p className="font-semibold text-gray-900">{r.experience || "N/A"}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 font-medium mb-1">Location</p>
+                          <p className="font-semibold text-gray-900">{r.location || "N/A"}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 font-medium mb-1">Phone Number</p>
+                          <p className="font-semibold text-gray-900">{r.phone_number || "Contact Not Provided"}</p>
+                        </div>
+                      </div>
+                      <div className="mt-4">
+                        <p className="text-xs text-gray-500 font-medium mb-1">Bio</p>
+                        <p className="text-sm text-gray-700">
+                          {r.bio || "No biography provided."}
+                        </p>
+                      </div>
+                    </div>
 
-                  <div className="space-y-3">
-                    <p>
-                      <span className="font-medium text-gray-800">Experience:</span> {r.experience || "N/A"}
-                    </p>
-                    <p>
-                      <span className="font-medium text-gray-800">Location:</span> {r.location || "N/A"}
-                    </p>
-                    <p>
-                      <span className="font-medium text-gray-800">Hourly Rate:</span> Rs. {r.hourly_rate ?? "N/A"}
-                    </p>
-                    <p>
-                      <span className="font-medium text-gray-800">Response Time:</span> {r.response_time || "N/A"}
-                    </p>
+                    {/* Verification Documents */}
+                    <div className="space-y-4">
+                      <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Verification Documents</h4>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        <DocumentCard label="ID / Citizenship" url={r.citizenship_id_url} />
+                        <DocumentCard label="Experience cert" url={r.experience_certificate_url} />
+                        {r.plus_two_url && <DocumentCard label="+2 Transcript" url={r.plus_two_url} />}
+                        {r.bachelors_degree_url && <DocumentCard label="Bachelors" url={r.bachelors_degree_url} />}
+                        {r.masters_degree_url && <DocumentCard label="Masters" url={r.masters_degree_url} />}
+                        {r.phd_url && <DocumentCard label="PhD Degree" url={r.phd_url} />}
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           );
         })}
       </div>
     </AuthLayout>
+  );
+}
+
+function DocumentCard({ label, url }: { label: string; url?: string }) {
+  if (!url) return (
+    <div className="bg-gray-50 border border-dashed border-gray-200 rounded-lg p-4 flex flex-col items-center justify-center opacity-60">
+      <Loader2 className="w-4 h-4 text-gray-300 mb-1" />
+      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider text-center">{label}</p>
+      <p className="text-[9px] text-gray-400 uppercase mt-0.5">Not Uploaded</p>
+    </div>
+  );
+
+  const isImage = url.match(/\.(jpeg|jpg|gif|png|webp)/i) != null || url.includes("cloudinary.com");
+
+  return (
+    <div className="group relative bg-white border border-gray-200 rounded-lg overflow-hidden hover:border-orange-300 transition shadow-sm">
+      <div className="aspect-[4/3] bg-gray-50 relative overflow-hidden flex items-center justify-center">
+        {isImage ? (
+          <img src={url} alt={label} className="w-full h-full object-cover" />
+        ) : (
+          <div className="flex flex-col items-center text-gray-400">
+            <Ban className="w-6 h-6 opacity-20" />
+            <span className="text-[9px] font-bold uppercase mt-1">PDF File</span>
+          </div>
+        )}
+        <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-white text-gray-900 px-3 py-1.5 rounded shadow-md font-bold text-[10px] uppercase tracking-wider hover:bg-gray-50 transition"
+          >
+            View
+          </a>
+        </div>
+      </div>
+      <div className="p-2 bg-white border-t border-gray-50 mt-auto">
+        <p className="text-[10px] font-bold text-gray-700 uppercase truncate">{label}</p>
+      </div>
+    </div>
   );
 }

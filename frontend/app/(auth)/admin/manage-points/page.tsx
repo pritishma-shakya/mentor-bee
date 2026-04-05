@@ -1,5 +1,7 @@
+"use client";
+
 import { useEffect, useState } from "react";
-import AuthLayout from "../../layout"; // adjust path if needed
+import AuthLayout from "../../layout";
 
 export default function ManagePointsPage() {
   const [user, setUser] = useState<any>(null);

@@ -42,23 +42,31 @@ export const initSocket = (io: Server) => {
     socket.join(`user_${userId}`);
 
     socket.on("join_conversation", async (conversationId: string) => {
-      socket.join(conversationId);
-
-      const messages = await getConversationMessages(conversationId, socket.data.user.id);
-      socket.emit("load_messages", messages);
+      try {
+        const messages = await getConversationMessages(conversationId, socket.data.user.id);
+        socket.join(conversationId);
+        socket.emit("load_messages", messages);
+      } catch (err: any) {
+        console.error("[Socket] join_conversation error:", err.message);
+        socket.emit("error", { 
+          message: err.message === "Forbidden" ? "Unauthorized access to conversation" : "Failed to join conversation" 
+        });
+      }
     });
 
     socket.on("join_session", (sessionId: string) => {
-      socket.join(`session_${sessionId}`);
+      try {
+        socket.join(`session_${sessionId}`);
+      } catch (err) {
+        console.error("[Socket] join_session error:", err);
+      }
     });
 
     socket.on("mark_read", async (conversationId: string) => {
       try {
         await markMessagesAsRead(conversationId, socket.data.user.id);
-        // Optionally notify other participants that messages were read
-        // io.to(conversationId).emit("messages_read", { conversationId, userId: socket.data.user.id });
-      } catch (err) {
-        console.error(err);
+      } catch (err: any) {
+        console.error("[Socket] mark_read error:", err.message);
       }
     });
 

@@ -16,8 +16,10 @@ export const addPoints = async (
   
   if (client) {
     await client.query(query, values);
+    await client.query(`UPDATE users SET points = points + $1 WHERE id = $2`, [points, studentId]);
   } else {
     await pgPool.query(query, values);
+    await pgPool.query(`UPDATE users SET points = points + $1 WHERE id = $2`, [points, studentId]);
   }
 
   // Generate notification (silently catches if error)

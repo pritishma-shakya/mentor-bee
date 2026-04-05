@@ -25,7 +25,6 @@ const clearCookieOptions = {
   path: "/",
 };
 
-/* ================= SIGNUP ================= */
 export const signup = async (req: AuthRequest, res: Response) => {
   const { email, password, name, role } = req.body;
 
@@ -55,6 +54,11 @@ export const signup = async (req: AuthRequest, res: Response) => {
 
     const user = rows[0];
     const token = generateToken(user.id, user.email, user.role);
+
+    // clear old cookies
+    res.clearCookie("student_auth_token", clearCookieOptions);
+    res.clearCookie("mentor_auth_token", clearCookieOptions);
+    res.clearCookie("admin_auth_token", clearCookieOptions);
 
     // set separate cookie
     if (user.role === "student") {
@@ -96,14 +100,13 @@ export const signup = async (req: AuthRequest, res: Response) => {
   }
 };
 
-/* ================= LOGIN ================= */
 export const login = async (req: AuthRequest, res: Response) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(422).json({ message: "Missing credentials" });
 
   try {
     const { rows } = await pgPool.query(
-      "SELECT id, email, name, password, role, profile_picture, phone_number, bio, language, theme, timezone, email_notifications, push_notifications, sms_alerts, interests, skill_level, preferred_times FROM users WHERE email = $1",
+      "SELECT id, email, name, password, role, profile_picture, phone_number, bio FROM users WHERE email = $1",
       [email.trim()]
     );
 
@@ -123,7 +126,7 @@ export const login = async (req: AuthRequest, res: Response) => {
     // set new cookie based on role
     if (user.role === "student") {
       res.cookie("student_auth_token", token, authCookieOptions);
-      try { await handleLoginPoints(user.id); } catch(e) { console.error("Error giving login points", e); }
+      try { await handleLoginPoints(user.id); } catch (e) { console.error("Error giving login points", e); }
     } else if (user.role === "mentor") {
       res.cookie("mentor_auth_token", token, authCookieOptions);
     } else {
@@ -140,15 +143,6 @@ export const login = async (req: AuthRequest, res: Response) => {
         profile_picture: user.profile_picture,
         phone_number: user.phone_number,
         bio: user.bio,
-        language: user.language,
-        theme: user.theme,
-        timezone: user.timezone,
-        email_notifications: user.email_notifications,
-        push_notifications: user.push_notifications,
-        sms_alerts: user.sms_alerts,
-        interests: user.interests,
-        skill_level: user.skill_level,
-        preferred_times: user.preferred_times,
       },
     });
   } catch (err) {
@@ -206,72 +200,10 @@ export const updateAccount = async (req: AuthRequest, res: Response) => {
        RETURNING id, name, email, role, profile_picture, phone_number, bio`,
       [name, profilePicture, phone_number, bio, userId]
     );
-    
+
     res.json({ success: true, message: "Account updated successfully", user: rows[0] });
   } catch (err) {
     console.error("updateAccount error:", err);
-    res.status(500).json({ success: false, message: "Internal server error" });
-  } finally {
-    client.release();
-  }
-};
-
-// =====================
-// Update user preferences
-// =====================
-export const updatePreferences = async (req: AuthRequest, res: Response) => {
-  const userId = req.user?.id;
-  if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
-
-  const {
-    language,
-    theme,
-    timezone,
-    email_notifications,
-    push_notifications,
-    sms_alerts,
-    interests,
-    skill_level,
-    preferred_times
-  } = req.body;
-
-  const client = await pgPool.connect();
-  try {
-    const { rows } = await client.query(
-      `UPDATE users 
-       SET language = COALESCE($1, language),
-           theme = COALESCE($2, theme),
-           timezone = COALESCE($3, timezone),
-           email_notifications = COALESCE($4, email_notifications),
-           push_notifications = COALESCE($5, push_notifications),
-           sms_alerts = COALESCE($6, sms_alerts),
-           interests = COALESCE($7, interests),
-           skill_level = COALESCE($8, skill_level),
-           preferred_times = COALESCE($9, preferred_times),
-           updated_at = NOW()
-       WHERE id = $10
-       RETURNING *`,
-      [
-        language,
-        theme,
-        timezone,
-        email_notifications,
-        push_notifications,
-        sms_alerts,
-        interests,
-        skill_level,
-        preferred_times,
-        userId
-      ]
-    );
-
-    res.json({
-      success: true,
-      message: "Preferences updated successfully",
-      user: rows[0]
-    });
-  } catch (err) {
-    console.error("updatePreferences error:", err);
     res.status(500).json({ success: false, message: "Internal server error" });
   } finally {
     client.release();

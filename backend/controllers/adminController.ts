@@ -98,18 +98,27 @@ export const listMentorRequests = async (_req: AuthRequest, res: Response) => {
               u.name AS full_name,
               u.email,
               u.profile_picture,
+              u.phone_number,
               m.bio,
               m.experience,
               m.location,
               m.hourly_rate,
               m.response_time,
               m.status,
+              m.citizenship_id_url,
+              m.bachelors_degree_url,
+              m.masters_degree_url,
+              m.plus_two_url,
+              m.phd_url,
+              m.experience_certificate_url,
+              m.highest_degree,
               ARRAY_AGG(e.name) AS expertise
        FROM mentors m
        JOIN users u ON m.user_id = u.id
        LEFT JOIN mentor_expertise me ON me.mentor_id = m.id
        LEFT JOIN expertise e ON e.id = me.expertise_id
-       GROUP BY m.id, u.name, u.email, u.profile_picture, m.bio, m.experience, m.location, m.hourly_rate, m.response_time, m.status
+       GROUP BY m.id, u.name, u.email, u.profile_picture, u.phone_number, m.bio, m.experience, m.location, m.hourly_rate, m.response_time, m.status,
+                m.citizenship_id_url, m.bachelors_degree_url, m.masters_degree_url, m.plus_two_url, m.phd_url, m.experience_certificate_url, m.highest_degree
        ORDER BY m.created_at DESC`
     );
 

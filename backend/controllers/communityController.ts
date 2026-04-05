@@ -21,6 +21,7 @@ export const getPosts = async (_req: AuthRequest, res: Response) => {
         u.name AS author,
         u.profile_picture,
         u.role AS author_role,
+        (SELECT type FROM post_likes WHERE post_id = p.id AND user_id = $1) AS user_reaction,
         COALESCE(
           json_agg(
             json_build_object(
@@ -42,9 +43,11 @@ export const getPosts = async (_req: AuthRequest, res: Response) => {
       LEFT JOIN comments c ON c.post_id = p.id
       LEFT JOIN users cu ON cu.id = c.author_id
       LEFT JOIN post_images pi ON pi.post_id = p.id
-      GROUP BY p.id, u.name, u.profile_picture, u.role
+      GROUP BY p.id, u.name, u.profile_picture, u.role, p.content, p.tag, p.likes_count, p.dislikes_count, p.trending, p.created_at
       ORDER BY p.created_at DESC
-    `);
+    `,
+      [_req.user?.id || null]
+    );
 
     res.json({ success: true, data: rows });
   } catch (err) {
@@ -144,19 +147,61 @@ export const reactToPost = async (req: AuthRequest, res: Response) => {
 
   const client = await pgPool.connect();
   try {
-    const field = type === "like" ? "likes_count" : "dislikes_count";
-    const { rows } = await client.query(
-      `UPDATE posts SET ${field} = ${field} + 1 WHERE id = $1 RETURNING id, likes_count AS likes, dislikes_count AS dislikes`,
+    await client.query("BEGIN");
+
+    // Check existing reaction
+    const { rows: existingReaction } = await client.query(
+      "SELECT id, type FROM post_likes WHERE post_id = $1 AND user_id = $2",
+      [postId, req.user.id]
+    );
+
+    if (existingReaction.length > 0) {
+      const oldType = existingReaction[0].type;
+      
+      if (oldType === type) {
+        // Toggle OFF: same type clicked again
+        await client.query("DELETE FROM post_likes WHERE id = $1", [existingReaction[0].id]);
+        const field = type === "like" ? "likes_count" : "dislikes_count";
+        await client.query(`UPDATE posts SET ${field} = GREATEST(0, ${field} - 1) WHERE id = $1`, [postId]);
+      } else {
+        // SWITCH: different type clicked
+        await client.query("UPDATE post_likes SET type = $1 WHERE id = $2", [type, existingReaction[0].id]);
+        
+        const removeField = oldType === "like" ? "likes_count" : "dislikes_count";
+        const addField = type === "like" ? "likes_count" : "dislikes_count";
+        
+        await client.query(`UPDATE posts SET 
+          ${removeField} = GREATEST(0, ${removeField} - 1),
+          ${addField} = ${addField} + 1 
+          WHERE id = $1`, [postId]);
+      }
+    } else {
+      // NEW REACTION
+      await client.query(
+        "INSERT INTO post_likes (post_id, user_id, type) VALUES ($1, $2, $3)",
+        [postId, req.user.id, type]
+      );
+      const field = type === "like" ? "likes_count" : "dislikes_count";
+      await client.query(`UPDATE posts SET ${field} = ${field} + 1 WHERE id = $1`, [postId]);
+    }
+
+    const { rows: updatedPost } = await client.query(
+      "SELECT id, likes_count AS likes, dislikes_count AS dislikes FROM posts WHERE id = $1",
       [postId]
     );
 
-    if (!rows.length) return res.status(404).json({ success: false, message: "Post not found" });
-    
-    const post = rows[0];
-    res.json({ success: true, data: post });
+    await client.query("COMMIT");
 
-    // Send Notification to Post Author
-    if (type === "like") {
+    const { rows: currentReaction } = await client.query(
+      "SELECT type FROM post_likes WHERE post_id = $1 AND user_id = $2",
+      [postId, req.user.id]
+    );
+    const user_reaction = currentReaction.length > 0 ? currentReaction[0].type : null;
+
+    res.json({ success: true, data: { ...updatedPost[0], user_reaction } });
+
+    // Send Notification only for new likes
+    if (type === "like" && existingReaction.length === 0) {
       const io = req.app.get("io");
       const { rows: authorRows } = await client.query(`SELECT author_id, content FROM posts WHERE id = $1`, [postId]);
       if (authorRows.length && authorRows[0].author_id !== req.user.id) {
@@ -169,21 +214,9 @@ export const reactToPost = async (req: AuthRequest, res: Response) => {
           io,
         });
       }
-
-      // Award points for every 5 likes
-      if (post.likes > 0 && post.likes % 5 === 0 && authorRows.length) {
-         try {
-           const authorId = authorRows[0].author_id;
-           const { rows: userRoleRow } = await client.query(`SELECT role FROM users WHERE id = $1`, [authorId]);
-           if (userRoleRow[0]?.role === "student") {
-              await addPoints(authorId, 1, `Received ${post.likes} likes on a post`);
-           }
-         } catch (e) {
-           console.error("Error giving like points", e);
-         }
-      }
     }
   } catch (err) {
+    await client.query("ROLLBACK");
     console.error("reactToPost error:", err);
     res.status(500).json({ success: false, message: "Internal server error" });
   } finally {
@@ -262,6 +295,27 @@ export const createTag = async (req: AuthRequest, res: Response) => {
     res.json({ success: true, data: name.trim() });
   } catch (err) {
     console.error("createTag error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  } finally {
+    client.release();
+  }
+};
+
+export const getTopContributors = async (_req: AuthRequest, res: Response) => {
+  const client = await pgPool.connect();
+  try {
+    const { rows } = await client.query(
+      `SELECT u.name, u.profile_picture, 
+              (SELECT COUNT(*) FROM posts WHERE author_id = u.id) + 
+              (SELECT COUNT(*) FROM comments WHERE author_id = u.id) as interaction_count
+       FROM users u
+       WHERE u.id IN (SELECT author_id FROM posts UNION SELECT author_id FROM comments)
+       ORDER BY interaction_count DESC
+       LIMIT 5`
+    );
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error("getTopContributors error:", err);
     res.status(500).json({ success: false, message: "Internal server error" });
   } finally {
     client.release();
