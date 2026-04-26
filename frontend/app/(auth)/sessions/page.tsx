@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Pagination from "@/components/pagination";
 import {
   ChevronRight,
   ChevronDown,
@@ -43,6 +44,9 @@ interface Session {
 }
 
 export default function SessionsPage() {
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -265,7 +269,11 @@ export default function SessionsPage() {
     }
   };
 
-  return (
+
+  const totalPages = Math.ceil((filteredSessions || []).length / ITEMS_PER_PAGE);
+  const paginatedData = (filteredSessions || []).slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+
+    return (
     <AuthLayout header={{ title: "Your Mentorship Sessions", subtitle: "Keep learning and growing today!", user }}>
       {/* Tabs */}
       <div className="flex gap-6 border-b border-gray-200 mb-5">
@@ -298,7 +306,7 @@ export default function SessionsPage() {
             <p className="text-gray-400 font-medium">No {activeTab.toLowerCase()} sessions found.</p>
           </div>
         ) : (
-          filteredSessions.map((session) => (
+          paginatedData.map((session) => (
             <SessionCard
               key={session.id}
               session={session as any}
@@ -310,7 +318,7 @@ export default function SessionsPage() {
           ))
         )}
       </div>
-
+      <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
     </AuthLayout>
   );
 }

@@ -2,7 +2,8 @@ import { Response } from "express";
 import { pgPool } from "../config/database";
 import { AuthRequest } from "../middlewares/authMiddleware";
 import { createNotification, getAdminUserId } from "../utils/notificationService";
-import { handleSessionBookingPoints, handleSessionCompletionPoints } from "../utils/rewardsService";
+import { handleSessionBookingPoints, handleSessionCompletionPoints, addPoints } from "../utils/rewardsService";
+import { sendSessionConfirmationEmail } from "../utils/emailService";
 
 // Helper to format date cleanly (YYYY-MM-DD)
 const formatDate = (date: any) => {
@@ -52,8 +53,14 @@ export const bookSession = async (req: AuthRequest, res: Response) => {
     const newSession = sessionRows[0];
     
     // 2. Handle Price and Discount
-    const { rows: mentorInfo } = await client.query(`SELECT hourly_rate FROM mentors WHERE id = $1`, [mentor_id]);
-    const baseAmount = mentorInfo[0]?.hourly_rate || 0;
+    const { rows: mentorInfo } = await client.query(`
+      SELECT m.hourly_rate, u.email as mentor_email, u.name as mentor_name 
+      FROM mentors m 
+      JOIN users u ON m.user_id = u.id 
+      WHERE m.id = $1
+    `, [mentor_id]);
+    const mentorDetail = mentorInfo[0];
+    const baseAmount = mentorDetail?.hourly_rate || 0;
     let amountToCharge = total_amount || baseAmount;
     let discountAmount = 0;
 
@@ -69,7 +76,15 @@ export const bookSession = async (req: AuthRequest, res: Response) => {
             } else {
                 discountAmount = Number(promo.discount_value);
             }
-            amountToCharge = Math.max(0, baseAmount - discountAmount);
+            amountToCharge = Math.max(0, Number(baseAmount) - Number(discountAmount));
+            
+            // Excess credit to reward points (Requested feature)
+            if (Number(discountAmount) > Number(baseAmount)) {
+              const excessCredits = Math.floor(Number(discountAmount) - Number(baseAmount));
+              if (excessCredits > 0) {
+                await addPoints(studentId, excessCredits, `Promo Credit Overflow: ${promo.code}`, client);
+              }
+            }
 
             // Increment usage count
             await client.query("UPDATE promo_codes SET usage_count = usage_count + 1 WHERE id = $1", [promoCodeId]);
@@ -109,6 +124,33 @@ export const bookSession = async (req: AuthRequest, res: Response) => {
       data: { sessionId: newSession.id },
       io,
     });
+
+
+    // Send Session Confirmation Emails Async
+    try {
+      const details = {
+        studentName: req.user?.name || "Student",
+        mentorName: mentorDetail?.mentor_name || "Mentor",
+        date: cleanDate,
+        time: cleanTime,
+        course: course,
+        price: amountToCharge.toString(),
+        type: type || "Online",
+        location: location || null
+      };
+
+      // Email to Student
+      if (req.user?.email) {
+        sendSessionConfirmationEmail(req.user.email, req.user.name || "Student", details, false);
+      }
+      
+      // Email to Mentor
+      if (mentorDetail?.mentor_email) {
+        sendSessionConfirmationEmail(mentorDetail.mentor_email, mentorDetail.mentor_name || "Mentor", details, true);
+      }
+    } catch (err) {
+      console.error("Session email notification error:", err);
+    }
 
     // If paid via eSewa, send success notification to Student AND Admin
     if (payment_status === "Paid") {

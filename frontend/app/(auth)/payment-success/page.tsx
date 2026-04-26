@@ -95,7 +95,7 @@ function PaymentSuccessContent() {
                             <CheckCircle2 className="w-12 h-12" />
                         </div>
                         <div>
-                            <h2 className="text-2xl font-black text-gray-900 mb-2">Payment Successful!</h2>
+                            <h2 className="text-2xl font-bold text-gray-900 mb-2">Payment Successful!</h2>
                             <p className="text-gray-500 font-medium">Your session has been securely booked.</p>
                         </div>
 

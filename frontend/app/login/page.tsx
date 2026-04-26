@@ -91,7 +91,7 @@ export default function LoginPage() {
           <div className="p-8 md:p-10 flex flex-col justify-center">
             <Logo width={80} height={80} />
 
-            <h1 className="text-2xl font-bold text-gray-800 mt-4 mb-1">
+            <h1 className="text-2xl font-bold text-gray-900 mt-4 mb-1">
               Welcome back 👋
             </h1>
 

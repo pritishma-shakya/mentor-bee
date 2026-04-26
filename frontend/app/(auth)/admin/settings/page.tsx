@@ -6,8 +6,6 @@ import { User, Shield, Settings, Loader2 } from "lucide-react";
 import AuthLayout from "../../layout";
 import AccountSettings from "@/components/settings/AccountSettings";
 import SecuritySettings from "@/components/settings/SecuritySettings";
-import NotificationSettings from "@/components/settings/NotificationSettings";
-import PreferenceSettings from "@/components/settings/PreferenceSettings";
 import { Bell, Globe, Sparkles } from "lucide-react";
 
 type TabType = "account" | "security" | "system" | "notifications" | "preferences";
@@ -49,9 +47,6 @@ export default function AdminSettingsPage() {
   const tabs = [
     { id: "account", label: "Admin Account", icon: User },
     { id: "security", label: "Security", icon: Shield },
-    { id: "notifications", label: "Notifications", icon: Bell },
-    { id: "preferences", label: "Preferences", icon: Globe },
-    { id: "system", label: "System Config", icon: Settings },
   ];
 
   return (
@@ -88,8 +83,6 @@ export default function AdminSettingsPage() {
         <div className="bg-white rounded-2xl p-8 border border-gray-100 shadow-sm min-h-[500px]">
           {activeTab === "account" && <AccountSettings user={user} onUpdate={(updated: any) => setUser({...user, ...updated})} />}
           {activeTab === "security" && <SecuritySettings />}
-          {activeTab === "notifications" && <NotificationSettings user={user} onUpdate={(updated: any) => setUser({...user, ...updated})} />}
-          {activeTab === "preferences" && <PreferenceSettings user={user} onUpdate={(updated: any) => setUser({...user, ...updated})} />}
           {activeTab === "system" && (
             <div className="space-y-6">
               <div>

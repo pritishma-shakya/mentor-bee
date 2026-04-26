@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Pagination from "@/components/pagination";
 import AuthLayout from "../../layout";
 import { toast } from "react-hot-toast";
 import { DollarSign, TrendingUp, ArrowRight } from "lucide-react";
@@ -22,6 +23,9 @@ interface EarningsData {
 }
 
 export default function MentorEarningsPage() {
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+
   const [earnings, setEarnings] = useState<EarningsData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -46,7 +50,11 @@ export default function MentorEarningsPage() {
     fetchEarnings();
   }, []);
 
-  return (
+
+  const totalPages = Math.ceil((earnings?.transactions || []).length / ITEMS_PER_PAGE);
+  const paginatedData = (earnings?.transactions || []).slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+
+    return (
     <AuthLayout header={{ title: "My Earnings", subtitle: "Track your revenue and payments" }}>
       <div className="p-4 space-y-5">
 
@@ -124,7 +132,7 @@ export default function MentorEarningsPage() {
                     </td>
                   </tr>
                 ) : (
-                  earnings.transactions.map((t) => (
+                  paginatedData.map((t) => (
                     <tr key={t.id} className="hover:bg-gray-50/50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
                         {new Date(t.created_at).toLocaleDateString()}
@@ -157,6 +165,7 @@ export default function MentorEarningsPage() {
           </div>
         </div>
       </div>
+      <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
     </AuthLayout>
   );
 }

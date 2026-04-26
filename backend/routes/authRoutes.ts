@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { signup, login, logout, getProfile, updateAccount, changePassword } from "../controllers/authController";
+import { signup, login, logout, getProfile, updateAccount, changePassword, verifyEmail } from "../controllers/authController";
 import { authenticate } from "../middlewares/authMiddleware";
 import { upload } from "../middlewares/uploadMiddleware";
 import { config } from "../config";
@@ -10,6 +10,7 @@ const router = Router();
 
 /* ===== BASIC AUTH ===== */
 router.post("/signup", signup);
+router.get("/verify-email", verifyEmail);
 router.post("/login", login);
 router.post("/logout", authenticate, logout);
 router.get("/profile", authenticate, getProfile);

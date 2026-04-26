@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useState, useRef } from "react";
+export const dynamic = "force-dynamic";
+import { useEffect, useState, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Send, Search } from "lucide-react";
 import { toast } from "react-hot-toast";
@@ -36,7 +37,7 @@ interface UserProps {
   profile_picture?: string;
 }
 
-export default function MessagesPage() {
+function MessagesContent() {
   const searchParams = useSearchParams();
   const mentorIdParam = searchParams.get("mentorId");
 
@@ -459,6 +460,14 @@ export default function MessagesPage() {
         </div>
       </div>
     </AuthLayout>
+  );
+}
+
+export default function MessagesPage() {
+  return (
+    <Suspense fallback={<div className="h-full flex items-center justify-center p-10"><p>Loading messages...</p></div>}>
+      <MessagesContent />
+    </Suspense>
   );
 }
 

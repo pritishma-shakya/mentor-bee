@@ -37,7 +37,7 @@ interface Session {
     rescheduled_time?: string;
 }
 
-export default function ManageBookingsPage() {
+function ManageBookingsContent() {
     const [user, setUser] = useState<User | null>(null);
     const [sessions, setSessions] = useState<Session[]>([]);
     const [loading, setLoading] = useState(true);
@@ -293,5 +293,13 @@ export default function ManageBookingsPage() {
 
             </div>
         </AuthLayout>
+    );
+}
+
+export default function ManageBookingsPage() {
+    return (
+        <Suspense fallback={<div className="p-8">Loading bookings...</div>}>
+            <ManageBookingsContent />
+        </Suspense>
     );
 }

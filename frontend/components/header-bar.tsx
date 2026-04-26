@@ -26,7 +26,7 @@ export default function HeaderBar({ user, title, subtitle, showSearch, searchQue
   return (
     <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
       <div>
-        {title && <h1 className="text-xl font-semibold text-gray-900">{title}</h1>}
+        {title && <h1 className="text-2xl font-bold text-gray-900">{title}</h1>}
         {subtitle && <p className="text-gray-600 mt-0.5 text-sm">{subtitle}</p>}
       </div>
 

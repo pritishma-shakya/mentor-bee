@@ -98,7 +98,6 @@ export default function Sidebar() {
     { icon: UserCheck, label: "Manage Mentors", path: "/admin/mentors" },
     { icon: Calendar, label: "All Sessions", path: "/admin/sessions" },
     { icon: DollarSign, label: "Revenue", path: "/admin/revenue" },
-    { icon: Shield, label: "Manage Points", path: "/admin/manage-points" },
     { icon: Tag, label: "Promo Codes", path: "/admin/promo-codes" },
     { icon: Settings, label: "System Settings", path: "/admin/settings" },
   ];

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Pagination from "@/components/pagination";
 import AuthLayout from "../../layout"; 
 import { toast } from "react-hot-toast";
 
@@ -16,6 +17,9 @@ interface Transaction {
 }
 
 export default function RevenuePage() {
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalRevenue, setTotalRevenue] = useState(0);
@@ -47,7 +51,11 @@ export default function RevenuePage() {
     fetchTransactions();
   }, []);
 
-  return (
+
+  const totalPages = Math.ceil((transactions || []).length / ITEMS_PER_PAGE);
+  const paginatedData = (transactions || []).slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+
+    return (
     <AuthLayout header={{ title: "Manage Revenue", subtitle: "View platform earnings and transactions", user }}>
       <div className="p-4">
         <div className="flex flex-col md:flex-row gap-4 mb-6">
@@ -80,7 +88,7 @@ export default function RevenuePage() {
                 ) : transactions.length === 0 ? (
                   <tr><td colSpan={6} className="px-6 py-10 text-center text-gray-400">No transactions found.</td></tr>
                 ) : (
-                  transactions.map((t) => (
+                  paginatedData.map((t) => (
                     <tr key={t.id} className="hover:bg-gray-50/50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
                         {new Date(t.created_at).toLocaleDateString()}
@@ -99,6 +107,7 @@ export default function RevenuePage() {
           </div>
         </div>
       </div>
+      <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
     </AuthLayout>
   );
 }

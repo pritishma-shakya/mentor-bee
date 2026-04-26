@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import dynamic from "next/dynamic";
@@ -37,7 +37,7 @@ interface Schedule {
   times: string[];
 }
 
-export default function BookSessionPage() {
+function BookSessionContent() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -283,7 +283,9 @@ export default function BookSessionPage() {
         payload.newTime = selectedTime;
       }
 
-      if (paymentMethod === "eSewa" && !rescheduleSessionId) {
+      const total = calculateTotal();
+
+      if (paymentMethod === "eSewa" && !rescheduleSessionId && total > 0) {
         const transactionId = `MB-${Date.now()}`;
 
         // Save pending booking details to localStorage
@@ -296,7 +298,7 @@ export default function BookSessionPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            total_amount: calculateTotal().toString(),
+            total_amount: total.toString(),
             transaction_uuid: transactionId,
             product_code: "EPAYTEST"
           }),
@@ -315,9 +317,9 @@ export default function BookSessionPage() {
         form.style.display = "none";
 
         const fields = {
-          amount: calculateTotal().toString(),
+          amount: total.toString(),
           tax_amount: "0",
-          total_amount: calculateTotal().toString(),
+          total_amount: total.toString(),
           transaction_uuid: transactionId,
           product_code: "EPAYTEST",
           product_service_charge: "0",
@@ -340,6 +342,11 @@ export default function BookSessionPage() {
         form.submit();
 
         return; // Stop execution here as the page will navigate away
+      }
+
+      // If total is 0, we can treat it as Paid immediately
+      if (total === 0 && !rescheduleSessionId) {
+          payload.payment_status = "Paid";
       }
 
       const res = await fetch(url, {
@@ -834,5 +841,13 @@ export default function BookSessionPage() {
         )}
       </div>
     </AuthLayout>
+  );
+}
+
+export default function BookSessionPage() {
+  return (
+    <Suspense fallback={<p>Loading mentor...</p>}>
+      <BookSessionContent />
+    </Suspense>
   );
 }

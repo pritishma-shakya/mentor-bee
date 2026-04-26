@@ -1,10 +1,12 @@
 import { Response } from "express";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import { pgPool } from "../config/database";
 import { generateToken } from "../utils/generateToken";
 import { AuthRequest } from "../middlewares/authMiddleware";
 import { createNotification, getAdminUserId } from "../utils/notificationService";
 import { uploadToCloudinary } from "../utils/cloudinaryUpload";
+import { sendVerificationEmail } from "../utils/emailService";
 import { addPoints, handleLoginPoints } from "../utils/rewardsService";
 
 export type UserRole = "student" | "mentor" | "admin";
@@ -45,30 +47,21 @@ export const signup = async (req: AuthRequest, res: Response) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 12);
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+
     const { rows } = await client.query(
-      `INSERT INTO users (email, password, name, role)
-       VALUES ($1,$2,$3,$4)
+      `INSERT INTO users (email, password, name, role, is_verified, verification_token)
+       VALUES ($1,$2,$3,$4,$5,$6)
        RETURNING id, email, name, role`,
-      [email, hashedPassword, name, role]
+      [email, hashedPassword, name, role, false, verificationToken]
     );
 
     const user = rows[0];
-    const token = generateToken(user.id, user.email, user.role);
-
-    // clear old cookies
+    
+    // clear old cookies just in case
     res.clearCookie("student_auth_token", clearCookieOptions);
     res.clearCookie("mentor_auth_token", clearCookieOptions);
     res.clearCookie("admin_auth_token", clearCookieOptions);
-
-    // set separate cookie
-    if (user.role === "student") {
-      res.cookie("student_auth_token", token, authCookieOptions);
-      await addPoints(user.id, 20, "First account registration", client);
-    } else if (user.role === "mentor") {
-      res.cookie("mentor_auth_token", token, authCookieOptions);
-    } else {
-      res.cookie("admin_auth_token", token, authCookieOptions);
-    }
 
     await client.query("COMMIT");
 
@@ -90,7 +83,16 @@ export const signup = async (req: AuthRequest, res: Response) => {
       console.error("Admin notification failed:", notifErr);
     }
 
-    res.status(201).json({ success: true, user });
+
+    // Send Welcome Email Async
+    try {
+      const verifyLink = `${process.env.APP_URL || 'http://localhost:3000'}/verify-email?token=${verificationToken}`;
+      if (user.email) await sendVerificationEmail(user.email, user.name, verifyLink);
+    } catch (e) {
+      console.error("Email send failed:", e);
+    }
+
+    res.status(201).json({ success: true, message: "Signup successful. Please verify your email.", user, verificationRequired: true });
   } catch (err) {
     await client.query("ROLLBACK");
     console.error("Signup error:", err);
@@ -106,12 +108,16 @@ export const login = async (req: AuthRequest, res: Response) => {
 
   try {
     const { rows } = await pgPool.query(
-      "SELECT id, email, name, password, role, profile_picture, phone_number, bio FROM users WHERE email = $1",
+      "SELECT id, email, name, password, role, profile_picture, phone_number, bio, is_verified FROM users WHERE email = $1",
       [email.trim()]
     );
 
     const user = rows[0];
     if (!user) return res.status(401).json({ message: "Invalid email or password" });
+
+    if (user.is_verified === false) {
+      return res.status(403).json({ message: "Please verify your email before logging in." });
+    }
 
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) return res.status(401).json({ message: "Invalid email or password" });
@@ -243,5 +249,29 @@ export const changePassword = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ success: false, message: "Internal server error" });
   } finally {
     client.release();
+  }
+};
+
+
+/* ================= VERIFY EMAIL ================= */
+export const verifyEmail = async (req: AuthRequest, res: Response) => {
+  const { token } = req.query;
+  
+  if (!token) return res.status(400).json({ message: "Validation token missing" });
+
+  try {
+    const { rows } = await pgPool.query(
+      "UPDATE users SET is_verified = true, verification_token = NULL WHERE verification_token = $1 RETURNING id",
+      [token]
+    );
+
+    if (rows.length === 0) {
+      return res.status(400).json({ message: "Invalid or expired verification token" });
+    }
+
+    res.json({ success: true, message: "Email verified successfully" });
+  } catch (err) {
+    console.error("verifyEmail error:", err);
+    res.status(500).json({ message: "Internal server error during verification" });
   }
 };

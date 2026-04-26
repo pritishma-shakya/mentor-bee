@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Pagination from "@/components/pagination";
 import AuthLayout from "../../layout";
 import { toast } from "react-hot-toast";
 import { Video, MapPin } from "lucide-react";
@@ -33,6 +34,9 @@ const PAYMENT_COLORS: Record<string, string> = {
 };
 
 export default function AdminSessionsPage() {
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+
   const [sessions, setSessions] = useState<AdminSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState("All");
@@ -76,7 +80,11 @@ export default function AdminSessionsPage() {
     return `${hour % 12 || 12}:${m} ${hour >= 12 ? "PM" : "AM"}`;
   };
 
-  return (
+
+  const totalPages = Math.ceil((filtered || []).length / ITEMS_PER_PAGE);
+  const paginatedData = (filtered || []).slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+
+    return (
     <AuthLayout header={{ title: "All Sessions", subtitle: "Monitor all platform sessions", user }}>
       <div className="space-y-4">
         {/* Stats */}
@@ -132,7 +140,7 @@ export default function AdminSessionsPage() {
                 ) : filtered.length === 0 ? (
                   <tr><td colSpan={7} className="px-3 py-8 text-center text-gray-400 text-xs">No sessions found.</td></tr>
                 ) : (
-                  filtered.map(s => (
+                  paginatedData.map(s => (
                     <tr key={s.id} className="hover:bg-gray-50/50 transition-colors">
                       <td className="px-3 py-2.5 font-medium text-gray-800 whitespace-nowrap">{s.student_name}</td>
                       <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{s.mentor_name}</td>
@@ -166,6 +174,7 @@ export default function AdminSessionsPage() {
           </div>
         </div>
       </div>
+      <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
     </AuthLayout>
   );
 }

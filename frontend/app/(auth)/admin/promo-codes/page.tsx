@@ -79,7 +79,7 @@ export default function AdminPromoCodesPage() {
     };
 
     const handleDelete = async (id: string) => {
-        if (!confirm("Are you sure you want to delete this promo code? Admin deletion is permanent.")) return;
+        if (!confirm("Are you sure you want to delete this promo code?")) return;
 
         try {
             const res = await fetch(`http://localhost:5000/api/promo-codes/${id}`, {
@@ -233,7 +233,7 @@ export default function AdminPromoCodesPage() {
                                                     <button
                                                         onClick={() => handleDelete(pc.id)}
                                                         className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100"
-                                                        title="Delete (Permanent)"
+                                                        title="Delete"
                                                     >
                                                         <Trash2 className="w-4 h-4" />
                                                     </button>
@@ -265,7 +265,7 @@ export default function AdminPromoCodesPage() {
                                                 value={newCode}
                                                 onChange={(e) => setNewCode(e.target.value.toUpperCase())}
                                                 className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-sm focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 outline-none font-black tracking-widest text-gray-900 placeholder:text-gray-500 placeholder:font-normal placeholder:tracking-normal"
-                                                placeholder="e.g. BEEKEEPER50"
+                                                placeholder="e.g. PROMO50"
                                                 required
                                             />
                                         </div>

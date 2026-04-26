@@ -5,7 +5,7 @@ import { Users, UserCheck, Calendar, DollarSign } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import AuthLayout from "../../layout"; // adjust path if needed
+import AuthLayout from "../../layout";
 
 interface AdminSummary {
   totalUsers: number;

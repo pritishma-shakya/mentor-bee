@@ -9,7 +9,6 @@ export const startReminderService = () => {
             const io = (global as any).io;
             if (!io) return;
 
-            // We want to check all accepted sessions that haven't been completed or cancelled
             const { rows: sessions } = await pgPool.query(`
                 SELECT s.*, u_student.name as student_name, u_mentor.name as mentor_name, 
                        m.user_id as mentor_user_id
@@ -33,7 +32,7 @@ export const startReminderService = () => {
                 const diffHours = diffMs / (1000 * 60 * 60);
                 const diffMinutes = diffMs / (1000 * 60);
 
-                const cleanTime = session.time.split(':').slice(0, 2).join(':'); // HH:MM
+                const cleanTime = session.time.split(':').slice(0, 2).join(':'); 
                 const cleanDate = sessionDateStr;
 
                 const sendReminder = async (intervalLabel: string, column: string) => {

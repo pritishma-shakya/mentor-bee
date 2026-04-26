@@ -24,6 +24,7 @@ export default function SignUpPage() {
   const [passwordError, setPasswordError] = useState("");
   const [confirmPasswordError, setConfirmPasswordError] = useState("");
   const [generalError, setGeneralError] = useState("");
+  const [verificationSent, setVerificationSent] = useState(false);
 
   const [passwordFocused, setPasswordFocused] = useState(false);
 
@@ -92,7 +93,7 @@ export default function SignUpPage() {
       const res = await fetch("http://localhost:5000/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include", // ✅ important for cookies
+        credentials: "include", 
         body: JSON.stringify({ name, email, password, role }),
       });
 
@@ -104,11 +105,15 @@ export default function SignUpPage() {
         return;
       }
 
-      // Store token locally if needed
+      if (data.verificationRequired) {
+        setVerificationSent(true);
+        setLoading(false);
+        return;
+      }
+
+      // Fallback
       localStorage.setItem("token", data.token);
       localStorage.setItem("role", role);
-
-      // Redirect based on role
       window.location.href = role === "mentor" ? "/setup" : "/home";
 
     } catch (error: any) {
@@ -117,6 +122,27 @@ export default function SignUpPage() {
       setLoading(false);
     }
   };
+
+  if (verificationSent) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-pink-50 flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-hidden p-10 text-center">
+          <div className="flex justify-center mb-6"><Logo width={80} height={80} /></div>
+          <div className="mx-auto w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mb-6">
+            <Check className="w-8 h-8 text-green-600" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">Check Your Email</h2>
+          <p className="text-gray-600 mb-8">
+            We've successfully sent a secure verification link to <br/><span className="font-semibold text-gray-900">{email}</span> 
+            <br/><br/>Please click the button inside the email to dynamically activate your account and break the login lock.
+          </p>
+          <a href="/login" className="inline-block px-10 py-3 bg-orange-600 text-white font-bold rounded-lg hover:bg-orange-700 shadow-sm transition">
+            Back to Login
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-pink-50 flex items-center justify-center p-4">
@@ -152,7 +178,7 @@ export default function SignUpPage() {
               </button>
             </div>
 
-            <h1 className="text-xl font-bold text-gray-800 mb-1">
+            <h1 className="text-2xl font-bold text-gray-900 mb-1">
               {role === "mentor" ? "Become a Mentor" : "Create Your Account"}
             </h1>
 

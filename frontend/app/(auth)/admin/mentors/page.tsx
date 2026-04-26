@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Fragment } from "react";
+import Pagination from "@/components/pagination";
 import toast, { Toaster } from "react-hot-toast";
 import { ChevronRight, ChevronDown, Loader2, CheckCircle, XCircle, Ban } from "lucide-react";
-import AuthLayout from "../../layout"; // Adjust path if needed
+import AuthLayout from "../../layout";
 
 interface Admin {
   id: string;
@@ -36,6 +37,9 @@ interface MentorRequest {
 }
 
 export default function AdminApprovalsPage() {
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+
   const [admin, setAdmin] = useState<Admin | null>(null);
   const [requests, setRequests] = useState<MentorRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -119,6 +123,9 @@ export default function AdminApprovalsPage() {
 
   if (loading) return <p className="text-center mt-10">Loading...</p>;
 
+  const totalPages = Math.ceil((requests || []).length / ITEMS_PER_PAGE);
+  const paginatedData = (requests || []).slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+
   return (
     <AuthLayout
       header={{
@@ -128,156 +135,137 @@ export default function AdminApprovalsPage() {
       }}
     >
       <Toaster position="top-right" />
+      <div className="overflow-x-auto rounded-xl border border-gray-200">
+        <table className="w-full text-left text-sm text-gray-600">
+          <thead className="bg-gray-50 text-gray-700 text-xs uppercase font-semibold">
+            <tr>
+              <th className="px-5 py-4">Applicant</th>
+              <th className="px-5 py-4">Contact</th>
+              <th className="px-5 py-4">Details</th>
+              <th className="px-5 py-4">Status</th>
+              <th className="px-5 py-4 text-right cursor-pointer" onClick={() => {/* no-op */ }}>Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {requests.length === 0 && (
+              <tr>
+                <td colSpan={5} className="px-5 py-10 text-center text-gray-500 font-medium">
+                  No mentor requests found.
+                </td>
+              </tr>
+            )}
 
-      <div className="mt-6 space-y-4">
-        {requests.length === 0 && (
-          <div className="bg-white rounded-xl p-12 text-center border border-gray-100 shadow-sm">
-            <p className="text-gray-500 font-medium">No pending mentor requests found.</p>
-          </div>
-        )}
+            {paginatedData.map((r) => {
+              const expanded = expandedIds.includes(r.id);
+              const isLoading = loadingId === r.id;
 
-        {requests.map((r) => {
-          const expanded = expandedIds.includes(r.id);
-          const isLoading = loadingId === r.id;
-
-          return (
-            <div
-              key={r.id}
-              className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden"
-            >
-              {/* Summary Row */}
-              <div className="p-4 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center overflow-hidden flex-shrink-0 text-orange-600 font-bold">
-                    {r.profile_picture ? (
-                      <img
-                        src={r.profile_picture}
-                        alt={r.full_name || "Mentor"}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      r.full_name ? r.full_name[0].toUpperCase() : "?"
-                    )}
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-                      {r.full_name || "N/A"}
-                      {r.highest_degree && (
-                        <span className="text-[10px] bg-orange-100 text-orange-700 px-2 py-0.5 rounded font-bold uppercase">
-                          {r.highest_degree}
-                        </span>
-                      )}
-                    </h3>
-                    <p className="text-sm text-gray-500">{r.email || "N/A"}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 self-end md:self-auto">
-                  <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[r.status]}`}>
-                    {r.status.charAt(0).toUpperCase() + r.status.slice(1)}
-                  </span>
-
-                  {r.status === "pending" && (
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleAction(r.id, "accept")}
-                        disabled={isLoading}
-                        className="px-4 py-2 bg-gray-900 hover:bg-black text-white rounded-lg text-sm font-medium transition disabled:opacity-50 flex items-center gap-2"
-                      >
-                        {isLoading && <Loader2 className="h-3 w-3 animate-spin" />}
-                        Approve
-                      </button>
-                      <button
-                        onClick={() => handleAction(r.id, "reject")}
-                        disabled={isLoading}
-                        className="px-4 py-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-lg text-sm font-medium transition disabled:opacity-50"
-                      >
-                        Reject
-                      </button>
-                    </div>
-                  )}
-
-                  {r.status === "accepted" && (
-                    <button
-                      onClick={() => handleAction(r.id, "suspend")}
-                      disabled={isLoading}
-                      className="px-4 py-2 bg-gray-100 hover:bg-red-50 hover:text-red-600 text-gray-600 rounded-lg text-sm font-medium transition disabled:opacity-50"
-                    >
-                      Suspend
-                    </button>
-                  )}
-
-                  <button
-                    onClick={() => toggleExpand(r.id)}
-                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-400"
-                  >
-                    {expanded ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
-                  </button>
-                </div>
-              </div>
-
-              {/* Details Section */}
-              {expanded && (
-                <div className="border-t border-gray-100 bg-gray-50/30 p-6 space-y-8">
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    {/* Basic Info */}
-                    <div className="space-y-4">
-                      <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Profile Information</h4>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+              return (
+                <Fragment key={r.id}>
+                  <tr className="hover:bg-gray-50/50 transition-colors bg-white">
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center overflow-hidden flex-shrink-0 text-orange-600 font-bold">
+                          {r.profile_picture ? (
+                            <img src={r.profile_picture} alt={r.full_name || "Mentor"} className="w-full h-full object-cover" />
+                          ) : (
+                            r.full_name ? r.full_name[0].toUpperCase() : "?"
+                          )}
+                        </div>
                         <div>
-                          <p className="text-xs text-gray-500 font-medium mb-1">Expertise</p>
-                          <div className="flex flex-wrap gap-1.5">
-                            {r.expertise?.length ? r.expertise.map((exp, i) => (
-                              <span key={i} className="bg-white border border-gray-200 px-2 py-0.5 rounded text-xs text-gray-700">
-                                {exp}
-                              </span>
-                            )) : "None"}
+                          <h3 className="font-semibold text-gray-900">{r.full_name || "N/A"}</h3>
+                          <p className="text-xs text-gray-500">{r.email || "N/A"}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-5 py-4">
+                      <p className="text-gray-900 font-medium whitespace-nowrap">{r.phone_number || "N/A"}</p>
+                      <p className="text-xs text-gray-500 whitespace-nowrap">{r.location || "N/A"}</p>
+                    </td>
+                    <td className="px-5 py-4">
+                      <p className="text-gray-900 font-medium whitespace-nowrap">Rs. {r.hourly_rate ?? "N/A"}/hr</p>
+                      <p className="text-xs text-gray-500 whitespace-nowrap">{r.experience || "N/A"}</p>
+                    </td>
+                    <td className="px-5 py-4">
+                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap ${statusColors[r.status]}`}>
+                        {r.status}
+                      </span>
+                    </td>
+                    <td className="px-5 py-4 min-w-[200px]">
+                      <div className="flex items-center justify-end gap-2">
+                        {r.status === "pending" && (
+                          <>
+                            <button onClick={() => handleAction(r.id, "accept")} disabled={isLoading} className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded shadow-sm text-xs font-bold transition flex items-center gap-1">
+                              {isLoading && <Loader2 className="h-3 w-3 animate-spin" />} Accept
+                            </button>
+                            <button onClick={() => handleAction(r.id, "reject")} disabled={isLoading} className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded shadow-sm text-xs font-bold transition flex items-center gap-1">
+                              {isLoading && <Loader2 className="h-3 w-3 animate-spin" />} Reject
+                            </button>
+                          </>
+                        )}
+                        {r.status === "accepted" && (
+                          <button onClick={() => handleAction(r.id, "suspend")} disabled={isLoading} className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded shadow-sm text-xs font-bold transition flex items-center gap-1">
+                            {isLoading && <Loader2 className="h-3 w-3 animate-spin" />} Suspend
+                          </button>
+                        )}
+                        <button onClick={() => toggleExpand(r.id)} className="p-1.5 bg-gray-100 border border-gray-200 hover:bg-gray-200 rounded text-gray-600 transition ml-2">
+                          {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+
+                  {expanded && (
+                    <tr className="bg-gray-50/80">
+                      <td colSpan={5} className="p-0 border-t border-gray-100 shadow-inner">
+                        <div className="p-6 md:p-8 space-y-8">
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            {/* Basic Info */}
+                            <div className="space-y-4">
+                              <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Profile Information</h4>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                                <div>
+                                  <p className="text-xs text-gray-500 font-medium mb-1">Expertise</p>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {r.expertise?.length ? r.expertise.map((exp, i) => (
+                                      <span key={i} className="bg-white border border-gray-200 px-2 py-0.5 rounded text-xs text-gray-700">
+                                        {exp}
+                                      </span>
+                                    )) : "None"}
+                                  </div>
+                                </div>
+                                <div className="col-span-2 mt-4">
+                                  <p className="text-xs text-gray-500 font-medium mb-1">Biography</p>
+                                  <p className="text-sm text-gray-700 bg-white p-3 rounded-lg border border-gray-200">
+                                    {r.bio || "No biography provided."}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Verification Documents */}
+                            <div className="space-y-4">
+                              <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Verification Documents</h4>
+                              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                <DocumentCard label="ID / Citizenship" url={r.citizenship_id_url} />
+                                <DocumentCard label="Experience cert" url={r.experience_certificate_url} />
+                                {r.plus_two_url && <DocumentCard label="+2 Transcript" url={r.plus_two_url} />}
+                                {r.bachelors_degree_url && <DocumentCard label="Bachelors" url={r.bachelors_degree_url} />}
+                                {r.masters_degree_url && <DocumentCard label="Masters" url={r.masters_degree_url} />}
+                                {r.phd_url && <DocumentCard label="PhD Degree" url={r.phd_url} />}
+                              </div>
+                            </div>
                           </div>
                         </div>
-                        <div>
-                          <p className="text-xs text-gray-500 font-medium mb-1">Hourly Rate</p>
-                          <p className="font-semibold text-gray-900">Rs. {r.hourly_rate ?? "N/A"}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-500 font-medium mb-1">Experience</p>
-                          <p className="font-semibold text-gray-900">{r.experience || "N/A"}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-500 font-medium mb-1">Location</p>
-                          <p className="font-semibold text-gray-900">{r.location || "N/A"}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-500 font-medium mb-1">Phone Number</p>
-                          <p className="font-semibold text-gray-900">{r.phone_number || "Contact Not Provided"}</p>
-                        </div>
-                      </div>
-                      <div className="mt-4">
-                        <p className="text-xs text-gray-500 font-medium mb-1">Bio</p>
-                        <p className="text-sm text-gray-700">
-                          {r.bio || "No biography provided."}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Verification Documents */}
-                    <div className="space-y-4">
-                      <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Verification Documents</h4>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                        <DocumentCard label="ID / Citizenship" url={r.citizenship_id_url} />
-                        <DocumentCard label="Experience cert" url={r.experience_certificate_url} />
-                        {r.plus_two_url && <DocumentCard label="+2 Transcript" url={r.plus_two_url} />}
-                        {r.bachelors_degree_url && <DocumentCard label="Bachelors" url={r.bachelors_degree_url} />}
-                        {r.masters_degree_url && <DocumentCard label="Masters" url={r.masters_degree_url} />}
-                        {r.phd_url && <DocumentCard label="PhD Degree" url={r.phd_url} />}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
+      <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
     </AuthLayout>
   );
 }

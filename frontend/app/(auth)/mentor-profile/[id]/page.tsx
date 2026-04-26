@@ -180,7 +180,7 @@ export default function MentorProfilePage({ params }: { params: Promise<{ id: st
           </div>
 
           <div className="text-center md:text-left">
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-1">
+            <h1 className="text-2xl font-bold text-gray-900 mb-1">
               {mentor.full_name}
             </h1>
             <p className="text-lg text-gray-800 mb-4 font-medium">
