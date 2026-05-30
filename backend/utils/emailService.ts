@@ -38,6 +38,34 @@ export const sendVerificationEmail = async (email: string, name: string, verifyL
   }
 };
 
+export const sendPasswordResetEmail = async (email: string, name: string, resetLink: string) => {
+  try {
+    const info = await transporter.sendMail({
+      from: `"MentorBee" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
+      to: email,
+      subject: "Reset your MentorBee password",
+      html: `
+        <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+          <h2 style="color: #f97316;">Reset your password</h2>
+          <p>Hi ${name || "there"},</p>
+          <p>We received a request to reset your MentorBee password. Click the button below to choose a new password.</p>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${resetLink}" style="background-color: #f97316; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Reset Password</a>
+          </div>
+          <p>This link will expire in 1 hour. If you did not request this, you can safely ignore this email.</p>
+          <br/>
+          <p>Best regards,<br/>The MentorBee Team</p>
+        </div>
+      `,
+    });
+    console.log("Password reset email sent:", info.messageId);
+    return true;
+  } catch (error) {
+    console.error("Error sending password reset email:", error);
+    return false;
+  }
+};
+
 export interface SessionDetails {
   studentName: string;
   mentorName: string;
@@ -50,13 +78,13 @@ export interface SessionDetails {
 }
 
 export const sendSessionConfirmationEmail = async (
-  email: string, 
-  recipientName: string, 
+  email: string,
+  recipientName: string,
   details: SessionDetails,
   isMentor: boolean = false
 ) => {
   try {
-    const subject = isMentor 
+    const subject = isMentor
       ? `New Session Booked - ${details.studentName}`
       : `Session Confirmed - ${details.mentorName}`;
 
@@ -121,7 +149,7 @@ export const sendSessionConfirmationEmail = async (
       subject: subject,
       html: html,
     });
-    
+
     console.log(`Session confirmation email sent to ${email} (${isMentor ? 'Mentor' : 'Student'}):`, info.messageId);
     return true;
   } catch (error) {

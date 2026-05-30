@@ -30,7 +30,6 @@ export const getDashboardSummary = async (_req: AuthRequest, res: Response) => {
   }
 };
 
-// Get all transactions
 export const getTransactions = async (_req: AuthRequest, res: Response) => {
   const client = await pgPool.connect();
   try {
@@ -53,7 +52,6 @@ export const getTransactions = async (_req: AuthRequest, res: Response) => {
   }
 };
 
-// Get recent users
 export const getRecentUsers = async (_req: AuthRequest, res: Response) => {
   const client = await pgPool.connect();
   try {
@@ -72,7 +70,6 @@ export const getRecentUsers = async (_req: AuthRequest, res: Response) => {
   }
 };
 
-// Get pending mentor approvals
 export const getPendingMentorCount = async (_req: AuthRequest, res: Response) => {
   const client = await pgPool.connect();
   try {
@@ -131,7 +128,6 @@ export const listMentorRequests = async (_req: AuthRequest, res: Response) => {
   }
 };
 
-// Approve / Reject / Suspend mentor
 export const updateMentorStatus = async (req: AuthRequest, res: Response) => {
   const { id, action } = req.params;
   const client = await pgPool.connect();
@@ -161,7 +157,6 @@ export const updateMentorStatus = async (req: AuthRequest, res: Response) => {
 
     const { rows: updatedRows } = await client.query(query, params);
 
-    // Notify the mentor's user of approval/rejection
     try {
       const { rows: mentorUser } = await client.query(
         `SELECT user_id FROM mentors WHERE id = $1`, [id]
@@ -204,7 +199,6 @@ export const updateMentorStatus = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// List all students
 export const listStudents = async (_req: AuthRequest, res: Response) => {
   const client = await pgPool.connect();
   try {
@@ -223,7 +217,6 @@ export const listStudents = async (_req: AuthRequest, res: Response) => {
   }
 };
 
-// List all users (students + mentors)
 export const listAllUsers = async (_req: AuthRequest, res: Response) => {
   const client = await pgPool.connect();
   try {
@@ -242,7 +235,6 @@ export const listAllUsers = async (_req: AuthRequest, res: Response) => {
   }
 };
 
-// List all mentors (for admin tab)
 export const listMentors = async (_req: AuthRequest, res: Response) => {
   const client = await pgPool.connect();
   try {
@@ -263,7 +255,6 @@ export const listMentors = async (_req: AuthRequest, res: Response) => {
   }
 };
 
-// Get all sessions (admin view)
 export const getAllSessions = async (_req: AuthRequest, res: Response) => {
   const client = await pgPool.connect();
   try {
@@ -289,14 +280,12 @@ export const getAllSessions = async (_req: AuthRequest, res: Response) => {
   }
 };
 
-// Mark an in-person session as cash paid
 export const markSessionCashPaid = async (req: AuthRequest, res: Response) => {
   const { sessionId } = req.params;
   const client = await pgPool.connect();
   try {
     await client.query('BEGIN');
 
-    // Update payment status on session
     const { rows: sessionRows } = await client.query(
       `UPDATE sessions SET payment_status = 'Paid' WHERE id = $1 RETURNING *`,
       [sessionId]
@@ -307,7 +296,6 @@ export const markSessionCashPaid = async (req: AuthRequest, res: Response) => {
     }
     const session = sessionRows[0];
 
-    // Only insert payment record if not already exists
     const { rows: existingPayment } = await client.query(
       `SELECT id FROM payments WHERE session_id = $1`, [sessionId]
     );

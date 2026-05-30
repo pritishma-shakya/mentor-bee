@@ -8,7 +8,8 @@ export type NotificationType =
   | "message" 
   | "review" 
   | "interaction"
-  | "reward";
+  | "reward"
+  | "security";
 
 interface CreateNotificationParams {
   userId: string;

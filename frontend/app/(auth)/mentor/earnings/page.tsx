@@ -22,12 +22,29 @@ interface EarningsData {
   transactions: Transaction[];
 }
 
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: "mentor";
+  status?: "pending" | "accepted" | "rejected" | "suspended" | "banned" | "warned";
+}
+
 export default function MentorEarningsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
 
   const [earnings, setEarnings] = useState<EarningsData | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    fetch("http://localhost:5000/api/auth/profile", { credentials: "include" })
+      .then(res => res.json())
+      .then(data => setUser(data.user))
+      .catch(console.error);
+  }, []);
 
   useEffect(() => {
     const fetchEarnings = async () => {
@@ -55,7 +72,7 @@ export default function MentorEarningsPage() {
   const paginatedData = (earnings?.transactions || []).slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
     return (
-    <AuthLayout header={{ title: "My Earnings", subtitle: "Track your revenue and payments" }}>
+    <AuthLayout header={{ title: "My Earnings", subtitle: "Track your revenue and payments", user: user }}>
       <div className="p-4 space-y-5">
 
         {/* Summary Stats */}

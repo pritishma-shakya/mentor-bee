@@ -1,8 +1,10 @@
 // components/mentor-card.tsx
 "use client";
 
-import { Star, User } from "lucide-react";
+import { useState } from "react";
+import { Star, MoreVertical } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { ReportModal } from "./report-modal";
 
 interface MentorCardProps {
   mentor: {
@@ -13,14 +15,32 @@ interface MentorCardProps {
     tags?: string[];
     price: number;
     profile_picture?: string;
+    user_id?: string;
   };
 }
 
 export default function MentorCard({ mentor }: MentorCardProps) {
   const router = useRouter();
+  const [isReportOpen, setIsReportOpen] = useState(false);
 
   return (
-    <div className="bg-white rounded-xl p-4 border shadow-sm hover:shadow-md transition-all">
+    <div className="bg-white rounded-xl p-4 border shadow-sm hover:shadow-md transition-all relative group">
+      {/* 3 Dots Option for Reporting */}
+      {mentor.user_id && (
+        <div className="absolute top-3 right-3 z-10">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsReportOpen(true);
+            }}
+            className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+            title="Report Mentor"
+          >
+            <MoreVertical className="w-4 h-4 text-gray-400 hover:text-gray-600" />
+          </button>
+        </div>
+      )}
+
       <div className="flex flex-col items-center text-center">
         <div className="w-12 h-12 rounded-full flex items-center justify-center overflow-hidden bg-orange-100 border border-orange-200 shadow-sm">
           {mentor.profile_picture ? (
@@ -67,6 +87,15 @@ export default function MentorCard({ mentor }: MentorCardProps) {
           </button>
         </div>
       </div>
+
+      {isReportOpen && mentor.user_id && (
+        <ReportModal
+          isOpen={isReportOpen}
+          onClose={() => setIsReportOpen(false)}
+          reportedUserId={mentor.user_id}
+          reportedUserName={mentor.name}
+        />
+      )}
     </div>
   );
 }

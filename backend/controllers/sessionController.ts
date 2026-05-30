@@ -5,18 +5,174 @@ import { createNotification, getAdminUserId } from "../utils/notificationService
 import { handleSessionBookingPoints, handleSessionCompletionPoints, addPoints } from "../utils/rewardsService";
 import { sendSessionConfirmationEmail } from "../utils/emailService";
 
-// Helper to format date cleanly (YYYY-MM-DD)
 const formatDate = (date: any) => {
   if (!date) return "";
+  if (typeof date === "string") return date.split("T")[0];
   const d = new Date(date);
-  return d.toISOString().split('T')[0];
+  return [
+    d.getFullYear(),
+    String(d.getMonth() + 1).padStart(2, "0"),
+    String(d.getDate()).padStart(2, "0"),
+  ].join("-");
 };
 
-// Create a new session (student books a session)
+const parseSessionDateTime = (date: string | Date, time: string | Date) => {
+  const datePart = formatDate(date);
+  const [year, month, day] = datePart.split("-").map(Number);
+
+  if (time instanceof Date) {
+    return new Date(year, month - 1, day, time.getHours(), time.getMinutes(), 0);
+  }
+
+  const normalizedTime = String(time || "").trim().toLowerCase();
+
+  if (normalizedTime.includes("am") || normalizedTime.includes("pm")) {
+    const match = normalizedTime.match(/(\d+):(\d+)\s*(am|pm)/);
+    if (match) {
+      let hours = parseInt(match[1], 10);
+      const minutes = parseInt(match[2], 10);
+      const modifier = match[3];
+      if (modifier === "pm" && hours < 12) hours += 12;
+      if (modifier === "am" && hours === 12) hours = 0;
+      return new Date(year, month - 1, day, hours, minutes, 0);
+    }
+  }
+
+  const [hours = 0, minutes = 0] = normalizedTime.split(":").map(Number);
+  return new Date(year, month - 1, day, hours, minutes, 0);
+};
+
+const getRefundPercentage = (date: string | Date, time: string | Date, cancelledByRole?: string) => {
+  if (cancelledByRole === "mentor") return 100;
+
+  const sessionDate = parseSessionDateTime(date, time);
+  const hoursUntilSession = (sessionDate.getTime() - Date.now()) / (1000 * 60 * 60);
+
+  if (hoursUntilSession >= 24) return 100;
+  if (hoursUntilSession >= 12) return 50;
+  return 0;
+};
+
+let refundSchemaReady: Promise<void> | null = null;
+
+const ensureRefundSchema = () => {
+  if (!refundSchemaReady) {
+    refundSchemaReady = (async () => {
+      await pgPool.query(`
+        CREATE TABLE IF NOT EXISTS refunds (
+          id SERIAL PRIMARY KEY,
+          session_id TEXT UNIQUE,
+          payment_id TEXT,
+          student_id TEXT,
+          amount NUMERIC(10, 2) DEFAULT 0,
+          refund_amount NUMERIC(10, 2) NOT NULL DEFAULT 0,
+          percentage INTEGER DEFAULT 0,
+          refund_percentage INTEGER NOT NULL DEFAULT 0,
+          status TEXT NOT NULL DEFAULT 'not_eligible',
+          processed_at TIMESTAMPTZ,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+      `);
+    })();
+  }
+
+  return refundSchemaReady;
+};
+
+const createRefundIfEligible = async (session: any, io?: any, cancelledByRole?: string) => {
+  await ensureRefundSchema();
+
+  const { rows: paymentRows } = await pgPool.query(
+    `SELECT id, total_amount
+     FROM payments
+     WHERE session_id::text = $1::text
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [session.id]
+  );
+
+  const payment = paymentRows[0];
+  if (!payment) return null;
+
+  const totalAmount = Number(payment.total_amount || 0);
+  if (totalAmount <= 0) return null;
+
+  const refundPercentage = getRefundPercentage(session.date, session.time, cancelledByRole);
+  const refundAmount = Number(((totalAmount * refundPercentage) / 100).toFixed(2));
+  const { rows: existingRefundRows } = await pgPool.query(
+    `SELECT status FROM refunds WHERE session_id::text = $1::text LIMIT 1`,
+    [session.id]
+  );
+  const wasAlreadyProcessed = existingRefundRows[0]?.status === "processed";
+
+  const status = refundAmount > 0 ? "processed" : "not_eligible";
+
+  const { rows: refundRows } = await pgPool.query(
+    `INSERT INTO refunds (
+       session_id,
+       payment_id,
+       student_id,
+       amount,
+       refund_amount,
+       percentage,
+       refund_percentage,
+       status,
+       processed_at
+     )
+     VALUES ($1, $2, $3, $4, $4, $5, $5, $6, CASE WHEN $4::numeric > 0 THEN NOW() ELSE NULL END)
+     ON CONFLICT (session_id) DO UPDATE SET
+       payment_id = EXCLUDED.payment_id,
+       student_id = EXCLUDED.student_id,
+       amount = EXCLUDED.amount,
+       refund_amount = EXCLUDED.refund_amount,
+       percentage = EXCLUDED.percentage,
+       refund_percentage = EXCLUDED.refund_percentage,
+       status = CASE WHEN refunds.status = 'processed' THEN refunds.status ELSE EXCLUDED.status END,
+       processed_at = CASE
+         WHEN refunds.status = 'processed' THEN refunds.processed_at
+         WHEN EXCLUDED.status = 'processed' THEN NOW()
+         ELSE refunds.processed_at
+       END,
+       updated_at = NOW()
+     RETURNING *`,
+    [session.id, String(payment.id), session.student_id, refundAmount, refundPercentage, status]
+  );
+
+  if (refundAmount > 0 && refundRows[0].status === "processed" && !wasAlreadyProcessed) {
+    await createNotification({
+      userId: session.student_id,
+      type: "cancellation",
+      title: "Refund Processed",
+      message: `Your refund of Rs. ${refundAmount.toFixed(2)} has been processed.`,
+      data: { sessionId: session.id, refundId: refundRows[0].id, refundAmount, refundPercentage },
+      io,
+    });
+  }
+
+  return refundRows[0];
+};
+
 export const getSessionById = async (req: AuthRequest, res: Response) => {
   const { sessionId } = req.params;
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
   try {
-    const { rows } = await pgPool.query(`SELECT * FROM sessions WHERE id = $1`, [sessionId]);
+    const { rows } = await pgPool.query(
+      `SELECT s.*,
+              stu.name AS student_name,
+              stu.profile_picture,
+              mentor_user.id AS mentor_user_id,
+              mentor_user.name AS mentor_name
+       FROM sessions s
+       JOIN users stu ON stu.id = s.student_id
+       JOIN mentors m ON m.id = s.mentor_id
+       JOIN users mentor_user ON mentor_user.id = m.user_id
+       WHERE s.id = $1
+         AND (s.student_id = $2 OR m.user_id = $2)`,
+      [sessionId, userId]
+    );
     if (!rows.length) return res.status(404).json({ message: "Session not found" });
     res.json(rows[0]);
   } catch (err) {
@@ -27,9 +183,9 @@ export const getSessionById = async (req: AuthRequest, res: Response) => {
 
 export const bookSession = async (req: AuthRequest, res: Response) => {
   const studentId = req.user?.id;
-  const { 
-    mentor_id, date, time, course, notes, type, location, 
-    payment_status, transaction_uuid, total_amount, promoCodeId 
+  const {
+    mentor_id, date, time, course, notes, type, location,
+    payment_status, transaction_uuid, total_amount, promoCodeId
   } = req.body;
 
   if (!studentId) return res.status(401).json({ message: "Unauthorized" });
@@ -37,11 +193,41 @@ export const bookSession = async (req: AuthRequest, res: Response) => {
     return res.status(400).json({ message: "Missing required fields" });
 
   const client = await pgPool.connect();
-  
+
   try {
     await client.query('BEGIN');
-    
-    // 1. Create session
+
+    const { rowCount: availableMentorCount } = await client.query(
+      `SELECT 1
+       FROM mentors m
+       JOIN users u ON u.id = m.user_id
+       WHERE m.id = $1
+         AND m.status = 'accepted'
+         AND COALESCE(u.status, 'active') NOT IN ('suspended', 'banned')`,
+      [mentor_id]
+    );
+
+    if (availableMentorCount === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ message: "Mentor not found" });
+    }
+
+    const { rowCount: bookedSlotCount } = await client.query(
+      `SELECT 1
+       FROM sessions
+       WHERE mentor_id = $1
+         AND date = $2
+         AND "time" = $3
+         AND status NOT IN ('Cancelled', 'Rejected')
+       LIMIT 1`,
+      [mentor_id, date, time]
+    );
+
+    if ((bookedSlotCount ?? 0) > 0) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ message: "Time slot already booked" });
+    }
+
     const { rows: sessionRows } = await client.query(
       `INSERT INTO sessions 
        (mentor_id, student_id, date, time, course, notes, type, location, status, payment_status)
@@ -51,8 +237,7 @@ export const bookSession = async (req: AuthRequest, res: Response) => {
     );
 
     const newSession = sessionRows[0];
-    
-    // 2. Handle Price and Discount
+
     const { rows: mentorInfo } = await client.query(`
       SELECT m.hourly_rate, u.email as mentor_email, u.name as mentor_name 
       FROM mentors m 
@@ -65,37 +250,34 @@ export const bookSession = async (req: AuthRequest, res: Response) => {
     let discountAmount = 0;
 
     if (promoCodeId) {
-        const { rows: promoRows } = await client.query(
-            "SELECT * FROM promo_codes WHERE id = $1 AND status = 'approved' AND is_active = true",
-            [promoCodeId]
-        );
-        const promo = promoRows[0];
-        if (promo) {
-            if (promo.discount_type === 'percentage') {
-                discountAmount = (baseAmount * Number(promo.discount_value)) / 100;
-            } else {
-                discountAmount = Number(promo.discount_value);
-            }
-            amountToCharge = Math.max(0, Number(baseAmount) - Number(discountAmount));
-            
-            // Excess credit to reward points (Requested feature)
-            if (Number(discountAmount) > Number(baseAmount)) {
-              const excessCredits = Math.floor(Number(discountAmount) - Number(baseAmount));
-              if (excessCredits > 0) {
-                await addPoints(studentId, excessCredits, `Promo Credit Overflow: ${promo.code}`, client);
-              }
-            }
-
-            // Increment usage count
-            await client.query("UPDATE promo_codes SET usage_count = usage_count + 1 WHERE id = $1", [promoCodeId]);
+      const { rows: promoRows } = await client.query(
+        "SELECT * FROM promo_codes WHERE id = $1 AND status = 'approved' AND is_active = true",
+        [promoCodeId]
+      );
+      const promo = promoRows[0];
+      if (promo) {
+        if (promo.discount_type === 'percentage') {
+          discountAmount = (baseAmount * Number(promo.discount_value)) / 100;
+        } else {
+          discountAmount = Number(promo.discount_value);
         }
+        amountToCharge = Math.max(0, Number(baseAmount) - Number(discountAmount));
+
+        if (Number(discountAmount) > Number(baseAmount)) {
+          const excessCredits = Math.floor(Number(discountAmount) - Number(baseAmount));
+          if (excessCredits > 0) {
+            await addPoints(studentId, excessCredits, `Promo Credit Overflow: ${promo.code}`, client);
+          }
+        }
+
+        await client.query("UPDATE promo_codes SET usage_count = usage_count + 1 WHERE id = $1", [promoCodeId]);
+      }
     }
-    
-    // 3. Insert payment record if Paid
+
     if (payment_status === "Paid") {
       const adminRev = amountToCharge * 0.20;
       const mentorRev = amountToCharge * 0.80;
-      
+
       await client.query(
         `INSERT INTO payments 
          (session_id, student_id, mentor_id, transaction_uuid, total_amount, admin_revenue, mentor_revenue, promo_code_id, discount_amount)
@@ -103,18 +285,16 @@ export const bookSession = async (req: AuthRequest, res: Response) => {
         [newSession.id, studentId, mentor_id, transaction_uuid || null, amountToCharge, adminRev, mentorRev, promoCodeId || null, discountAmount]
       );
     }
-    
-    // Give booking points (loyalty + first booking logic handled inside)
+
     await handleSessionBookingPoints(studentId, mentor_id, client);
-    
+
     await client.query('COMMIT');
 
     res.status(201).json({ message: "Session booked", session: newSession });
 
-    // Send Notification to Mentor
     const io = req.app.get("io");
     const mentorUserId = await getMentorUserId(mentor_id);
-    const cleanTime = newSession.time.split(':').slice(0, 2).join(':'); // HH:MM
+    const cleanTime = newSession.time.split(':').slice(0, 2).join(':'); 
     const cleanDate = formatDate(date);
     await createNotification({
       userId: mentorUserId,
@@ -125,8 +305,6 @@ export const bookSession = async (req: AuthRequest, res: Response) => {
       io,
     });
 
-
-    // Send Session Confirmation Emails Async
     try {
       const details = {
         studentName: req.user?.name || "Student",
@@ -139,12 +317,10 @@ export const bookSession = async (req: AuthRequest, res: Response) => {
         location: location || null
       };
 
-      // Email to Student
       if (req.user?.email) {
         sendSessionConfirmationEmail(req.user.email, req.user.name || "Student", details, false);
       }
-      
-      // Email to Mentor
+
       if (mentorDetail?.mentor_email) {
         sendSessionConfirmationEmail(mentorDetail.mentor_email, mentorDetail.mentor_name || "Mentor", details, true);
       }
@@ -152,7 +328,6 @@ export const bookSession = async (req: AuthRequest, res: Response) => {
       console.error("Session email notification error:", err);
     }
 
-    // If paid via eSewa, send success notification to Student AND Admin
     if (payment_status === "Paid") {
       await createNotification({
         userId: studentId,
@@ -163,7 +338,6 @@ export const bookSession = async (req: AuthRequest, res: Response) => {
         io,
       });
 
-      // Admin payment notification
       try {
         const adminId = await getAdminUserId();
         if (adminId) {
@@ -182,8 +356,8 @@ export const bookSession = async (req: AuthRequest, res: Response) => {
     await client.query('ROLLBACK');
     console.error(err);
     if (err.code === "23505") {
-      // Unique violation: double booking
-      return res.status(400).json({ message: "Time slot already booked" });
+      
+      return res.status(409).json({ message: "Time slot already booked" });
     }
     res.status(500).json({ message: "Server error" });
   } finally {
@@ -191,7 +365,6 @@ export const bookSession = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// Get sessions for a mentor
 export const getMentorSessions = async (req: AuthRequest, res: Response) => {
   const mentorId = req.user?.id;
   if (!mentorId) return res.status(401).json({ message: "Unauthorized" });
@@ -203,6 +376,7 @@ export const getMentorSessions = async (req: AuthRequest, res: Response) => {
        JOIN mentors m ON s.mentor_id = m.id
        JOIN users u ON u.id = s.student_id
        WHERE m.user_id = $1
+        AND COALESCE(u.status, 'active') NOT IN ('suspended', 'banned')
        ORDER BY s.date ASC, s.time ASC`,
       [mentorId]
     );
@@ -213,7 +387,6 @@ export const getMentorSessions = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// Get sessions for a student
 export const getStudentSessions = async (req: AuthRequest, res: Response) => {
   const studentId = req.user?.id;
   if (!studentId) return res.status(401).json({ message: "Unauthorized" });
@@ -227,6 +400,7 @@ export const getStudentSessions = async (req: AuthRequest, res: Response) => {
        JOIN users u ON m.user_id = u.id
        LEFT JOIN reviews r ON r.session_id = s.id
        WHERE s.student_id = $1
+        AND COALESCE(u.status, 'active') NOT IN ('suspended', 'banned')
        ORDER BY s.date ASC, s.time ASC`,
       [studentId]
     );
@@ -261,12 +435,11 @@ export const updateSessionStatus = async (req: AuthRequest, res: Response) => {
     const session = rows[0];
     res.json({ message: "Status updated", session });
 
-    // Send Notification to Student/Mentor
     const io = req.app.get("io");
     const isMentor = req.user?.role === "mentor";
     const targetUserId = isMentor ? session.student_id : (await getMentorUserId(session.mentor_id));
 
-    const cleanTime = session.time.split(':').slice(0, 2).join(':'); // HH:MM
+    const cleanTime = session.time.split(':').slice(0, 2).join(':'); 
     const cleanDate = formatDate(session.date);
     if (status === "Accepted") {
       await createNotification({
@@ -278,6 +451,8 @@ export const updateSessionStatus = async (req: AuthRequest, res: Response) => {
         io,
       });
     } else if (status === "Rejected") {
+      await createRefundIfEligible(session, io, req.user?.role);
+
       await createNotification({
         userId: session.student_id,
         type: "cancellation",
@@ -287,6 +462,8 @@ export const updateSessionStatus = async (req: AuthRequest, res: Response) => {
         io,
       });
     } else if (status === "Cancelled") {
+      await createRefundIfEligible(session, io, req.user?.role);
+
       await createNotification({
         userId: targetUserId,
         type: "cancellation",
@@ -296,10 +473,9 @@ export const updateSessionStatus = async (req: AuthRequest, res: Response) => {
         io,
       });
     } else if (status === "Completed") {
-      // Emit session_completed event to the session room
+      
       io.to(`session_${sessionId}`).emit("session_completed", session);
 
-      // Notify admin of completed session
       try {
         const adminId = await getAdminUserId();
         if (adminId) {
@@ -314,7 +490,6 @@ export const updateSessionStatus = async (req: AuthRequest, res: Response) => {
         }
       } catch (e) { console.error("Admin session complete notif failed:", e); }
 
-      // Give Completion points
       try {
         await handleSessionCompletionPoints(session.student_id, session.mentor_id);
       } catch (e) {
@@ -327,7 +502,6 @@ export const updateSessionStatus = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// Request Cancellation (student or mentor)
 export const requestCancellation = async (req: AuthRequest, res: Response) => {
   const userId = req.user?.id;
   const { sessionId } = req.params;
@@ -347,7 +521,6 @@ export const requestCancellation = async (req: AuthRequest, res: Response) => {
     const session = rows[0];
     res.json({ message: "Cancellation requested", session });
 
-    // Send Notification
     const io = req.app.get("io");
     const isMentor = req.user?.role === "mentor";
     const targetUserId = isMentor ? session.student_id : (await getMentorUserId(session.mentor_id));
@@ -366,7 +539,6 @@ export const requestCancellation = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// Request Reschedule
 export const requestReschedule = async (req: AuthRequest, res: Response) => {
   const userId = req.user?.id;
   const { sessionId } = req.params;
@@ -375,7 +547,7 @@ export const requestReschedule = async (req: AuthRequest, res: Response) => {
   if (!newDate || !newTime) return res.status(400).json({ message: "New date and time required" });
 
   try {
-    const cleanTime = newTime.split(':').slice(0, 2).join(':'); // HH:MM
+    const cleanTime = newTime.split(':').slice(0, 2).join(':'); 
     const { rows } = await pgPool.query(
       `UPDATE sessions 
        SET status = 'Reschedule Requested', 
@@ -391,7 +563,6 @@ export const requestReschedule = async (req: AuthRequest, res: Response) => {
     const session = rows[0];
     res.json({ message: "Reschedule requested", session });
 
-    // Send Notification
     const io = req.app.get("io");
     const isMentor = req.user?.role === "mentor";
     const targetUserId = isMentor ? session.student_id : (await getMentorUserId(session.mentor_id));
@@ -411,11 +582,10 @@ export const requestReschedule = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// Respond to Reschedule/Cancellation
 export const respondToRequest = async (req: AuthRequest, res: Response) => {
   const userId = req.user?.id;
   const { sessionId } = req.params;
-  const { type, action } = req.body; // type: 'reschedule'|'cancel', action: 'accept'|'reject'
+  const { type, action } = req.body; 
   if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
   try {
@@ -470,36 +640,60 @@ export const respondToRequest = async (req: AuthRequest, res: Response) => {
         });
       }
     } else if (type === 'cancel') {
-        if (action === 'accept') {
-            await pgPool.query(`DELETE FROM sessions WHERE id = $1`, [sessionId]);
-            res.json({ message: "Cancellation accepted and session removed" });
-            await createNotification({
-                userId: session.cancel_requested_by,
-                type: "cancellation",
-                title: "Cancellation Accepted",
-                message: `${req.user?.name} has accepted the cancellation request.`,
-                data: { sessionId },
-                io,
-            });
-        } else {
-            const { rows } = await pgPool.query(
-                `UPDATE sessions 
+      if (action === 'accept') {
+        const mentorUserId = await getMentorUserId(session.mentor_id);
+        const cancellationRequestedByRole =
+          String(session.cancel_requested_by) === String(mentorUserId) ? "mentor" : "student";
+
+        const { rows } = await pgPool.query(
+          `UPDATE sessions
+           SET status = 'Cancelled',
+               cancel_requested_by = NULL,
+               cancel_requested_at = NULL,
+               updated_at = NOW()
+           WHERE id = $1
+           RETURNING *`,
+          [sessionId]
+        );
+        const cancelledSession = rows[0];
+        const refund = await createRefundIfEligible(cancelledSession, io, cancellationRequestedByRole);
+
+        res.json({
+          message: refund?.refund_amount > 0
+            ? "Cancellation accepted. Refund processed."
+            : "Cancellation accepted. No refund is available for this cancellation window.",
+          session: cancelledSession,
+          refund,
+        });
+        await createNotification({
+          userId: session.cancel_requested_by,
+          type: "cancellation",
+          title: "Cancellation Accepted",
+          message: refund?.refund_amount > 0
+            ? `${req.user?.name} has accepted the cancellation request. Your refund has been processed.`
+            : `${req.user?.name} has accepted the cancellation request. This cancellation is not eligible for a refund.`,
+          data: { sessionId },
+          io,
+        });
+      } else {
+        const { rows } = await pgPool.query(
+          `UPDATE sessions 
                  SET status = 'Accepted', 
                      cancel_requested_by = NULL, 
                      cancel_requested_at = NULL 
                  WHERE id = $1 RETURNING *`,
-                [sessionId]
-            );
-            res.json({ message: "Cancellation rejected", session: rows[0] });
-            await createNotification({
-                userId: session.cancel_requested_by,
-                type: "cancellation",
-                title: "Cancellation Rejected",
-                message: `${req.user?.name} has rejected the cancellation request.`,
-                data: { sessionId },
-                io,
-            });
-        }
+          [sessionId]
+        );
+        res.json({ message: "Cancellation rejected", session: rows[0] });
+        await createNotification({
+          userId: session.cancel_requested_by,
+          type: "cancellation",
+          title: "Cancellation Rejected",
+          message: `${req.user?.name} has rejected the cancellation request.`,
+          data: { sessionId },
+          io,
+        });
+      }
     }
   } catch (err) {
     console.error(err);
@@ -507,13 +701,11 @@ export const respondToRequest = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// Helper to get mentor's user_id from mentor_id
 async function getMentorUserId(mentorId: string) {
-    const { rows } = await pgPool.query(`SELECT user_id FROM mentors WHERE id = $1`, [mentorId]);
-    return rows[0]?.user_id;
+  const { rows } = await pgPool.query(`SELECT user_id FROM mentors WHERE id = $1`, [mentorId]);
+  return rows[0]?.user_id;
 }
 
-// Mark an in-person session as cash paid (called by mentor)
 export const markSessionCashPaid = async (req: AuthRequest, res: Response) => {
   const { sessionId } = req.params;
   const client = await pgPool.connect();

@@ -140,9 +140,8 @@ export default function AdminDashboard() {
                   <p className="text-xs text-gray-500">{u.email}</p>
                 </div>
                 <span
-                  className={`text-xs px-2 py-1 rounded-full ${
-                    u.role === "mentor" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
-                  }`}
+                  className={`text-xs px-2 py-1 rounded-full ${u.role === "mentor" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
+                    }`}
                 >
                   {u.role}
                 </span>

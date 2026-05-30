@@ -6,7 +6,7 @@ import { generateToken } from "../utils/generateToken";
 import { AuthRequest } from "../middlewares/authMiddleware";
 import { createNotification, getAdminUserId } from "../utils/notificationService";
 import { uploadToCloudinary } from "../utils/cloudinaryUpload";
-import { sendVerificationEmail } from "../utils/emailService";
+import { sendPasswordResetEmail, sendVerificationEmail } from "../utils/emailService";
 import { addPoints, handleLoginPoints } from "../utils/rewardsService";
 
 export type UserRole = "student" | "mentor" | "admin";
@@ -28,13 +28,16 @@ const clearCookieOptions = {
 };
 
 export const signup = async (req: AuthRequest, res: Response) => {
-  const { email, password, name, role } = req.body;
+  const { email, password, name, role, termsAccepted } = req.body;
 
   if (!email || !password || !name || !role)
     return res.status(422).json({ message: "All fields required" });
 
   if (!VALID_ROLES.includes(role))
     return res.status(400).json({ message: "Invalid role" });
+
+  if (!termsAccepted)
+    return res.status(422).json({ message: "You must accept the Terms and Conditions" });
 
   const client = await pgPool.connect();
   try {
@@ -50,22 +53,20 @@ export const signup = async (req: AuthRequest, res: Response) => {
     const verificationToken = crypto.randomBytes(32).toString('hex');
 
     const { rows } = await client.query(
-      `INSERT INTO users (email, password, name, role, is_verified, verification_token)
-       VALUES ($1,$2,$3,$4,$5,$6)
+      `INSERT INTO users (email, password, name, role, is_verified, verification_token, terms_accepted_at)
+       VALUES ($1,$2,$3,$4,$5,$6,NOW())
        RETURNING id, email, name, role`,
       [email, hashedPassword, name, role, false, verificationToken]
     );
 
     const user = rows[0];
-    
-    // clear old cookies just in case
+
     res.clearCookie("student_auth_token", clearCookieOptions);
     res.clearCookie("mentor_auth_token", clearCookieOptions);
     res.clearCookie("admin_auth_token", clearCookieOptions);
 
     await client.query("COMMIT");
 
-    // Notify admin of new user registration
     try {
       const io = (req as any).app?.get?.("io");
       const adminId = await getAdminUserId();
@@ -83,8 +84,6 @@ export const signup = async (req: AuthRequest, res: Response) => {
       console.error("Admin notification failed:", notifErr);
     }
 
-
-    // Send Welcome Email Async
     try {
       const verifyLink = `${process.env.APP_URL || 'http://localhost:3000'}/verify-email?token=${verificationToken}`;
       if (user.email) await sendVerificationEmail(user.email, user.name, verifyLink);
@@ -108,7 +107,7 @@ export const login = async (req: AuthRequest, res: Response) => {
 
   try {
     const { rows } = await pgPool.query(
-      "SELECT id, email, name, password, role, profile_picture, phone_number, bio, is_verified FROM users WHERE email = $1",
+      "SELECT id, email, name, password, role, profile_picture, phone_number, bio, is_verified, status FROM users WHERE email = $1",
       [email.trim()]
     );
 
@@ -119,17 +118,23 @@ export const login = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: "Please verify your email before logging in." });
     }
 
+    if (user.status === "banned") {
+      return res.status(403).json({ message: "Your account has been permanently banned due to safety violations." });
+    }
+
+    if (user.status === "suspended") {
+      return res.status(403).json({ message: "Your account is temporarily suspended. Please contact support." });
+    }
+
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) return res.status(401).json({ message: "Invalid email or password" });
 
     const token = generateToken(user.id, user.email, user.role);
 
-    // clear old cookies
     res.clearCookie("student_auth_token", clearCookieOptions);
     res.clearCookie("mentor_auth_token", clearCookieOptions);
-    res.clearCookie("admin_auth_token", clearCookieOptions); // Clear admin cookie too
+    res.clearCookie("admin_auth_token", clearCookieOptions); 
 
-    // set new cookie based on role
     if (user.role === "student") {
       res.cookie("student_auth_token", token, authCookieOptions);
       try { await handleLoginPoints(user.id); } catch (e) { console.error("Error giving login points", e); }
@@ -157,7 +162,101 @@ export const login = async (req: AuthRequest, res: Response) => {
   }
 };
 
-/* ================= LOGOUT ================= */
+export const forgotPassword = async (req: AuthRequest, res: Response) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(422).json({ message: "Email is required" });
+  }
+
+  try {
+    const { rows } = await pgPool.query(
+      `SELECT id, email, name, status
+       FROM users
+       WHERE email = $1`,
+      [email.trim()]
+    );
+
+    const user = rows[0];
+
+    if (!user || ["suspended", "banned"].includes(user.status)) {
+      return res.json({
+        success: true,
+        message: "If an account exists for that email, a password reset link has been sent.",
+      });
+    }
+
+    const resetToken = crypto.randomBytes(32).toString("hex");
+    const resetTokenHash = crypto.createHash("sha256").update(resetToken).digest("hex");
+    const resetExpiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
+    await pgPool.query(
+      `UPDATE users
+       SET password_reset_token = $1,
+           password_reset_expires_at = $2
+       WHERE id = $3`,
+      [resetTokenHash, resetExpiresAt, user.id]
+    );
+
+    const resetLink = `${process.env.APP_URL || "http://localhost:3000"}/reset-password?token=${resetToken}`;
+    await sendPasswordResetEmail(user.email, user.name, resetLink);
+
+    res.json({
+      success: true,
+      message: "If an account exists for that email, a password reset link has been sent.",
+    });
+  } catch (err) {
+    console.error("forgotPassword error:", err);
+    res.status(500).json({ message: "Failed to process password reset request" });
+  }
+};
+
+export const resetPassword = async (req: AuthRequest, res: Response) => {
+  const { token, password } = req.body;
+
+  if (!token || !password) {
+    return res.status(422).json({ message: "Reset token and new password are required" });
+  }
+
+  if (password.length < 8) {
+    return res.status(400).json({ message: "Password must be at least 8 characters long" });
+  }
+
+  const resetTokenHash = crypto.createHash("sha256").update(token).digest("hex");
+
+  try {
+    const { rows } = await pgPool.query(
+      `SELECT id, status
+       FROM users
+       WHERE password_reset_token = $1
+         AND password_reset_expires_at > NOW()`,
+      [resetTokenHash]
+    );
+
+    const user = rows[0];
+
+    if (!user || ["suspended", "banned"].includes(user.status)) {
+      return res.status(400).json({ message: "Invalid or expired reset link" });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    await pgPool.query(
+      `UPDATE users
+       SET password = $1,
+           password_reset_token = NULL,
+           password_reset_expires_at = NULL
+       WHERE id = $2`,
+      [hashedPassword, user.id]
+    );
+
+    res.json({ success: true, message: "Password reset successfully" });
+  } catch (err) {
+    console.error("resetPassword error:", err);
+    res.status(500).json({ message: "Failed to reset password" });
+  }
+};
+
 export const logout = (_req: AuthRequest, res: Response) => {
   res.clearCookie("student_auth_token", clearCookieOptions);
   res.clearCookie("mentor_auth_token", clearCookieOptions);
@@ -165,7 +264,6 @@ export const logout = (_req: AuthRequest, res: Response) => {
   res.json({ success: true, message: "Logged out successfully" });
 };
 
-/* ================= PROFILE ================= */
 export const getProfile = (req: AuthRequest, res: Response) => {
   if (!req.user) return res.status(401).json({ message: "Unauthorized" });
 
@@ -175,7 +273,6 @@ export const getProfile = (req: AuthRequest, res: Response) => {
   });
 };
 
-/* ================= UPDATE ACCOUNT ================= */
 export const updateAccount = async (req: AuthRequest, res: Response) => {
   const userId = req.user?.id;
   if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
@@ -216,7 +313,6 @@ export const updateAccount = async (req: AuthRequest, res: Response) => {
   }
 };
 
-/* ================= CHANGE PASSWORD ================= */
 export const changePassword = async (req: AuthRequest, res: Response) => {
   const userId = req.user?.id;
   if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
@@ -252,26 +348,60 @@ export const changePassword = async (req: AuthRequest, res: Response) => {
   }
 };
 
-
-/* ================= VERIFY EMAIL ================= */
 export const verifyEmail = async (req: AuthRequest, res: Response) => {
   const { token } = req.query;
-  
-  if (!token) return res.status(400).json({ message: "Validation token missing" });
+
+  if (!token) {
+    return res.status(400).json({
+      success: false,
+      message: "Validation token missing",
+    });
+  }
 
   try {
     const { rows } = await pgPool.query(
-      "UPDATE users SET is_verified = true, verification_token = NULL WHERE verification_token = $1 RETURNING id",
+      `
+      UPDATE users
+      SET is_verified = true,
+          verification_token = NULL
+      WHERE verification_token = $1
+      RETURNING id, email, role
+      `,
       [token]
     );
 
     if (rows.length === 0) {
-      return res.status(400).json({ message: "Invalid or expired verification token" });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or expired verification token",
+      });
     }
 
-    res.json({ success: true, message: "Email verified successfully" });
+    const user = rows[0];
+    const authToken = generateToken(user.id, user.email, user.role);
+
+    res.clearCookie("student_auth_token", clearCookieOptions);
+    res.clearCookie("mentor_auth_token", clearCookieOptions);
+    res.clearCookie("admin_auth_token", clearCookieOptions);
+
+    if (user.role === "student") {
+      res.cookie("student_auth_token", authToken, authCookieOptions);
+    } else if (user.role === "mentor") {
+      res.cookie("mentor_auth_token", authToken, authCookieOptions);
+    } else {
+      res.cookie("admin_auth_token", authToken, authCookieOptions);
+    }
+
+    res.json({
+      success: true,
+      message: "Email verified successfully",
+      role: user.role,
+    });
   } catch (err) {
     console.error("verifyEmail error:", err);
-    res.status(500).json({ message: "Internal server error during verification" });
+    res.status(500).json({
+      success: false,
+      message: "Internal server error during verification",
+    });
   }
 };

@@ -13,6 +13,7 @@ interface User {
   email: string;
   role: "student" | "mentor";
   profile_picture?: string;
+  status?: "pending" | "accepted" | "rejected" | "suspended" | "banned" | "warned";
 }
 interface Mentor {
   id: string;
@@ -125,30 +126,32 @@ export default function HomePage() {
         user,
       }}
     >
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mt-5">
-        {/* Left/Main Column */}
-        <div className="lg:col-span-2 space-y-5">
-          <section>
-            <h3 className="text-base font-semibold text-gray-900 mb-3">Your sessions this week</h3>
-            <div className="space-y-4">
-              {sessionsThisWeek.length === 0 ? (
-                <div className="text-center py-10 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                  <p className="text-gray-500 text-sm">No sessions scheduled for this week.</p>
-                </div>
-              ) : (
-                sessionsThisWeek.map((s) => <SessionCard key={s.id} session={s} user={user} />)
-              )}
-            </div>
-          </section>
+      <div className="mt-5 space-y-5">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          {/* Left/Main Column */}
+          <div className="lg:col-span-2 space-y-5">
+            <section>
+              <h3 className="text-base font-semibold text-gray-900 mb-3">Your sessions this week</h3>
+              <div className="space-y-4">
+                {sessionsThisWeek.length === 0 ? (
+                  <div className="text-center py-10 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                    <p className="text-gray-500 text-sm">No sessions scheduled for this week.</p>
+                  </div>
+                ) : (
+                  sessionsThisWeek.map((s) => <SessionCard key={s.id} session={s} user={user} />)
+                )}
+              </div>
+            </section>
 
-          <RecommendedMentors mentors={mentors} loading={loading} />
-        </div>
+            <RecommendedMentors mentors={mentors} loading={loading} />
+          </div>
 
-        {/* Right Column */}
-        <div className="space-y-5 w-full">
-          <Summary summary={summary} />
-          <Rewards points={summary.points} />
-          {/* <LearningGoals goals={learningGoals} setGoals={setLearningGoals} /> */}
+          {/* Right Column */}
+          <div className="space-y-5 w-full">
+            <Summary summary={summary} />
+            <Rewards points={summary.points} />
+            {/* <LearningGoals goals={learningGoals} setGoals={setLearningGoals} /> */}
+          </div>
         </div>
       </div>
     </AuthLayout>

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { signup, login, logout, getProfile, updateAccount, changePassword, verifyEmail } from "../controllers/authController";
+import { signup, login, logout, getProfile, updateAccount, changePassword, verifyEmail, forgotPassword, resetPassword } from "../controllers/authController";
 import { authenticate } from "../middlewares/authMiddleware";
 import { upload } from "../middlewares/uploadMiddleware";
 import { config } from "../config";
@@ -12,6 +12,8 @@ const router = Router();
 router.post("/signup", signup);
 router.get("/verify-email", verifyEmail);
 router.post("/login", login);
+router.post("/forgot-password", forgotPassword);
+router.post("/reset-password", resetPassword);
 router.post("/logout", authenticate, logout);
 router.get("/profile", authenticate, getProfile);
 router.put("/update-account", authenticate, upload.single("profilePicture"), updateAccount);

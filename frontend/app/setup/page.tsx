@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { Toaster, toast } from "react-hot-toast";
 import { User, Edit, X, Phone, FileText, Award, CheckCircle } from "lucide-react";
-import "./setup.css";
 
 interface Expertise {
   id: string;
@@ -62,13 +61,38 @@ export default function MentorSetupPage() {
   };
 
   const handleSubmit = async () => {
-    if (!bio || expertiseList.length === 0 || !phoneNumber) {
+    if (!bio || expertiseList.length === 0 || !phoneNumber || !experience || !location || !hourlyRate) {
       toast.error("Please fill all required fields");
       return;
     }
 
-    if (!citizenshipId || !bachelorsDegree || !experienceCertificate) {
-      toast.error("Please upload all required documents (ID, Bachelors, Experience)");
+    if (!citizenshipId) {
+      toast.error("Please upload your Citizenship / ID");
+      return;
+    }
+
+    if (!experienceCertificate) {
+      toast.error("Please upload your Experience Certificate");
+      return;
+    }
+
+    if (highestDegree === "+2" && !plusTwoTranscript) {
+      toast.error("Please upload your +2 Transcript");
+      return;
+    }
+
+    if (["Bachelors", "Masters", "PhD"].includes(highestDegree) && !bachelorsDegree) {
+      toast.error("Please upload your Bachelors Degree");
+      return;
+    }
+
+    if (["Masters", "PhD"].includes(highestDegree) && !mastersDegree) {
+      toast.error("Please upload your Masters Degree");
+      return;
+    }
+
+    if (highestDegree === "PhD" && !phdDegree) {
+      toast.error("Please upload your PhD Certificate");
       return;
     }
 
@@ -131,7 +155,7 @@ export default function MentorSetupPage() {
           <div className="space-y-6">
             {/* Profile Picture */}
             <div className="flex flex-col gap-2">
-              <label className="block text-sm font-bold text-gray-950">Profile Photo<RequiredStar /></label>
+              <label className="block text-sm font-bold text-gray-950">Profile Photo</label>
               <div className="flex items-center gap-4">
                 <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden border border-gray-200 relative group">
                   {profilePicture ? (

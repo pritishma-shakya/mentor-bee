@@ -15,7 +15,8 @@ export interface AuthRequest extends Request {
     profile_picture?: string;
     phone_number?: string;
     bio?: string;
-    status?: "pending" | "accepted" | "rejected" | "suspended";
+    status?: "active" | "pending" | "accepted" | "rejected" | "suspended" | "banned" | "warned";
+    account_status?: "active" | "suspended" | "banned" | "warned";
     verified_at?: string | null;
   };
 }
@@ -46,7 +47,7 @@ export const authenticate = async (
     const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
 
     const { rows: userRows } = await pgPool.query(
-      `SELECT id, email, COALESCE(name,'') AS name, role, profile_picture, phone_number, bio
+      `SELECT id, email, COALESCE(name,'') AS name, role, profile_picture, phone_number, bio, status
        FROM users
        WHERE id = $1`,
       [decoded.id]
@@ -56,6 +57,15 @@ export const authenticate = async (
       return res.status(401).json({ message: "User not found" });
 
     const user = userRows[0];
+    user.account_status = user.status || "active";
+
+    if (user.role !== "admin" && ["suspended", "banned"].includes(user.account_status)) {
+      return res.status(403).json({
+        message: user.account_status === "banned"
+          ? "Your account has been permanently banned due to safety violations."
+          : "Your account is temporarily suspended. Please contact support.",
+      });
+    }
 
     // Add mentor status if role is mentor
     if (user.role === "mentor") {
@@ -63,7 +73,7 @@ export const authenticate = async (
         `SELECT status, verified_at FROM mentors WHERE user_id = $1`,
         [user.id]
       );
-      user.status = mentorRows.length ? mentorRows[0].status : "pending";
+      user.status = mentorRows.length ? mentorRows[0].status : "not_setup";
       (user as any).verified_at = mentorRows.length ? mentorRows[0].verified_at : null;
     }
 

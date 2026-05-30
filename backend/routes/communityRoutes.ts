@@ -7,6 +7,7 @@ const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
 router.get("/posts", authenticate, communityController.getPosts);
+router.get("/posts/me", authenticate, communityController.getMyPosts);
 router.get("/tags", authenticate, communityController.getTags);
 router.get("/top-contributors", authenticate, communityController.getTopContributors);
 

@@ -169,11 +169,11 @@ export default function NotificationDropdown({ socket, user }: { socket: any, us
                   key={n.id}
                   onClick={() => handleNotificationClick(n)}
                   className={`p-4 border-b border-gray-50 last:border-0 hover:bg-gray-50 transition cursor-pointer relative ${
-                    !n.is_read ? "bg-orange-50/30" : ""
+                    n.type === 'security' ? "bg-red-50" : !n.is_read ? "bg-orange-50/30" : ""
                   }`}
                 >
                   <div className="flex justify-between items-start mb-1">
-                    <span className={`text-xs font-bold ${!n.is_read ? "text-orange-600" : "text-gray-900"}`}>
+                    <span className={`text-xs font-bold ${n.type === 'security' ? "text-red-600" : !n.is_read ? "text-orange-600" : "text-gray-900"}`}>
                       {n.title}
                     </span>
                     <span className="text-[10px] text-gray-400">

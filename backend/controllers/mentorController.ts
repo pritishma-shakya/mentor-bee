@@ -4,9 +4,6 @@ import { AuthRequest } from "../middlewares/authMiddleware";
 import cloudinary from "../config/cloudinary";
 import { uploadToCloudinary } from "../utils/cloudinaryUpload";
 
-// =====================
-// List all expertise (for dropdown when setting up profile)
-// =====================
 export const listExpertise = async (_req: AuthRequest, res: Response) => {
   const client = await pgPool.connect();
   try {
@@ -63,14 +60,55 @@ export const setupMentorProfile = async (req: AuthRequest, res: Response) => {
     });
   }
 
+  const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
+
+  if (!files || !files.citizenshipId?.[0]) {
+    return res.status(422).json({
+      success: false,
+      message: "Citizenship/ID document is required",
+    });
+  }
+
+  if (!files.experienceCertificate?.[0]) {
+    return res.status(422).json({
+      success: false,
+      message: "Experience certificate is required",
+    });
+  }
+
+  if (highestDegree === "+2" && !files.plusTwoTranscript?.[0]) {
+    return res.status(422).json({
+      success: false,
+      message: "+2 Transcript is required",
+    });
+  }
+
+  if (["Bachelors", "Masters", "PhD"].includes(highestDegree || "") && !files.bachelorsDegree?.[0]) {
+    return res.status(422).json({
+      success: false,
+      message: "Bachelors degree is required",
+    });
+  }
+
+  if (["Masters", "PhD"].includes(highestDegree || "") && !files.mastersDegree?.[0]) {
+    return res.status(422).json({
+      success: false,
+      message: "Masters degree is required",
+    });
+  }
+
+  if (highestDegree === "PhD" && !files.phdDegree?.[0]) {
+    return res.status(422).json({
+      success: false,
+      message: "PhD degree is required",
+    });
+  }
+
   const client = await pgPool.connect();
 
   try {
     await client.query("BEGIN");
 
-    // =========================
-    // Upload files if provided
-    // =========================
     let profilePictureUrl: string | null = null;
     let citizenshipIdUrl: string | null = null;
     let bachelorsDegreeUrl: string | null = null;
@@ -79,7 +117,7 @@ export const setupMentorProfile = async (req: AuthRequest, res: Response) => {
     let plusTwoUrl: string | null = null;
     let phdUrl: string | null = null;
 
-    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+    // files is already defined in outer scope
 
     if (files) {
       if (files.profilePicture?.[0]) {
@@ -112,15 +150,11 @@ export const setupMentorProfile = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    // Update user info (profile picture and phone number)
     await client.query(
       "UPDATE users SET profile_picture = COALESCE($1, profile_picture), phone_number = $2 WHERE id = $3",
       [profilePictureUrl, phone_number, req.user.id]
     );
 
-    // =========================
-    // Insert mentor profile
-    // =========================
     const { rows } = await client.query(
       `INSERT INTO mentors
          (user_id, bio, experience, location, response_time, hourly_rate, status, 
@@ -147,10 +181,6 @@ export const setupMentorProfile = async (req: AuthRequest, res: Response) => {
 
     const mentorId: string = rows[0].id;
 
-    // =========================
-    // Insert expertise
-    // =========================
-    // Existing ones
     if (Array.isArray(expertiseIds)) {
       for (const expId of expertiseIds) {
         await client.query(
@@ -162,12 +192,10 @@ export const setupMentorProfile = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    // New custom ones
     if (Array.isArray(customExpertise)) {
       for (const name of customExpertise) {
         if (!name || name.trim() === "") continue;
 
-        // Insert expertise if it doesn't exist, or just get the ID
         const { rows: expRows } = await client.query(
           `INSERT INTO expertise (name) 
            VALUES ($1) 
@@ -201,10 +229,6 @@ export const setupMentorProfile = async (req: AuthRequest, res: Response) => {
   }
 };
 
-
-// =====================
-// Update mentor profile
-// =====================
 export const updateMentorProfile = async (req: AuthRequest, res: Response) => {
   if (!req.user || req.user.role !== "mentor") {
     return res.status(403).json({ success: false, message: "Forbidden" });
@@ -264,7 +288,6 @@ export const updateMentorProfile = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ success: false, message: "Mentor profile not found" });
     }
 
-    // Update expertise if provided
     if (Array.isArray(expertiseIds)) {
       await client.query("DELETE FROM mentor_expertise WHERE mentor_id = $1", [mentor.id]);
 
@@ -287,9 +310,6 @@ export const updateMentorProfile = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// =====================
-// Get SINGLE mentor profile (for student view or own view)
-// =====================
 export const getMentorProfile = async (req: AuthRequest, res: Response) => {
   const { mentorId } = req.params;
 
@@ -313,7 +333,9 @@ export const getMentorProfile = async (req: AuthRequest, res: Response) => {
          u.bio as user_bio
        FROM mentors m
        JOIN users u ON m.user_id = u.id
-       WHERE m.id = $1`,
+       WHERE m.id = $1
+         AND m.status = 'accepted'
+         AND COALESCE(u.status, 'active') NOT IN ('suspended', 'banned')`,
       [mentorId]
     );
 
@@ -323,7 +345,6 @@ export const getMentorProfile = async (req: AuthRequest, res: Response) => {
 
     const mentor = rows[0];
 
-    // Fetch average rating and review count
     const { rows: ratingRows } = await client.query(
       `SELECT AVG(rating) as avg_rating, COUNT(*) as review_count 
        FROM reviews 
@@ -334,7 +355,6 @@ export const getMentorProfile = async (req: AuthRequest, res: Response) => {
     mentor.rating = ratingRows[0].avg_rating ? parseFloat(parseFloat(ratingRows[0].avg_rating).toFixed(1)) : 0;
     mentor.review_count = parseInt(ratingRows[0].review_count);
 
-    // Fetch expertise
     const { rows: expertiseRows } = await client.query(
       `SELECT e.id, e.name
        FROM mentor_expertise me
@@ -355,9 +375,6 @@ export const getMentorProfile = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// =====================
-// List all ACCEPTED mentors (for student dashboard / discovery)
-// =====================
 export const listMentors = async (_req: AuthRequest, res: Response) => {
   const client = await pgPool.connect();
   try {
@@ -377,6 +394,7 @@ export const listMentors = async (_req: AuthRequest, res: Response) => {
        FROM mentors m
        JOIN users u ON m.user_id = u.id
        WHERE m.status = 'accepted'
+         AND COALESCE(u.status, 'active') NOT IN ('suspended', 'banned')
        ORDER BY m.created_at DESC`
     );
 
@@ -386,7 +404,6 @@ export const listMentors = async (_req: AuthRequest, res: Response) => {
 
     const mentorIds = mentors.map((m) => m.id);
 
-    // Fetch ratings for all mentors in this list
     const { rows: ratingRows } = await client.query(
       `SELECT mentor_id, AVG(rating) as avg_rating, COUNT(*) as review_count 
         FROM reviews 
@@ -435,16 +452,13 @@ export const listMentors = async (_req: AuthRequest, res: Response) => {
   }
 };
 
-// =====================
-// Get mentor earnings (80% revenue split)
-// =====================
 export const getMentorEarnings = async (req: AuthRequest, res: Response) => {
   const userId = req.user?.id;
   if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
 
   const client = await pgPool.connect();
   try {
-    // Get the mentor record for this user
+
     const { rows: mentorRows } = await client.query(
       `SELECT id FROM mentors WHERE user_id = $1`,
       [userId]
@@ -454,7 +468,6 @@ export const getMentorEarnings = async (req: AuthRequest, res: Response) => {
     }
     const mentorId = mentorRows[0].id;
 
-    // Get summary stats
     const { rows: summaryRows } = await client.query(
       `SELECT 
          SUM(mentor_revenue) as total_revenue,
@@ -464,7 +477,6 @@ export const getMentorEarnings = async (req: AuthRequest, res: Response) => {
       [mentorId]
     );
 
-    // Monthly earnings (last 6 months)
     const { rows: monthlyRows } = await client.query(
       `SELECT 
          TO_CHAR(created_at, 'Mon YYYY') as month,
@@ -476,13 +488,13 @@ export const getMentorEarnings = async (req: AuthRequest, res: Response) => {
       [mentorId]
     );
 
-    // Recent transactions
     const { rows: transactions } = await client.query(
       `SELECT p.id, p.transaction_uuid, p.total_amount, p.mentor_revenue, p.created_at,
               u.name as student_name, u.email as student_email
        FROM payments p
        JOIN users u ON p.student_id = u.id
        WHERE p.mentor_id = $1
+        AND COALESCE(u.status, 'active') NOT IN ('suspended', 'banned')
        ORDER BY p.created_at DESC`,
       [mentorId]
     );
@@ -504,16 +516,13 @@ export const getMentorEarnings = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// =====================
-// Get mentor dashboard stats (sessions, students, recent activity)
-// =====================
 export const getMentorDashboardStats = async (req: AuthRequest, res: Response) => {
   const userId = req.user?.id;
   if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
 
   const client = await pgPool.connect();
   try {
-    // Get the mentor record for this user
+
     const { rows: mentorRows } = await client.query(
       `SELECT id FROM mentors WHERE user_id = $1`,
       [userId]
@@ -523,25 +532,31 @@ export const getMentorDashboardStats = async (req: AuthRequest, res: Response) =
     }
     const mentorId = mentorRows[0].id;
 
-    // Total sessions
     const { rows: countRows } = await client.query(
-      `SELECT COUNT(*) as total FROM sessions WHERE mentor_id = $1`,
+      `SELECT COUNT(*) as total
+       FROM sessions s
+       JOIN users u ON u.id = s.student_id
+       WHERE s.mentor_id = $1
+         AND COALESCE(u.status, 'active') NOT IN ('suspended', 'banned')`,
       [mentorId]
     );
 
-    // Unique students
     const { rows: studentCountRows } = await client.query(
-      `SELECT COUNT(DISTINCT student_id) as total FROM sessions WHERE mentor_id = $1`,
+      `SELECT COUNT(DISTINCT s.student_id) as total
+       FROM sessions s
+       JOIN users u ON u.id = s.student_id
+       WHERE s.mentor_id = $1
+         AND COALESCE(u.status, 'active') NOT IN ('suspended', 'banned')`,
       [mentorId]
     );
 
-    // Recent sessions (last 5)
     const { rows: recentSessions } = await client.query(
       `SELECT s.id, s.date, s.time, s.course, s.status, s.type,
               u.name as student_name, u.profile_picture as student_picture
        FROM sessions s
        JOIN users u ON u.id = s.student_id
        WHERE s.mentor_id = $1
+         AND COALESCE(u.status, 'active') NOT IN ('suspended', 'banned')
        ORDER BY s.date DESC, s.time DESC
        LIMIT 5`,
       [mentorId]
@@ -563,9 +578,6 @@ export const getMentorDashboardStats = async (req: AuthRequest, res: Response) =
   }
 };
 
-// =====================
-// Get list of unique students for the mentor
-// =====================
 export const getMentorStudents = async (req: AuthRequest, res: Response) => {
   const userId = req.user?.id;
   if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
@@ -592,6 +604,7 @@ export const getMentorStudents = async (req: AuthRequest, res: Response) => {
        FROM sessions s
        JOIN users u ON s.student_id = u.id
        WHERE s.mentor_id = $1
+        AND COALESCE(u.status, 'active') NOT IN ('suspended', 'banned')
        GROUP BY u.id, u.name, u.email, u.profile_picture
        ORDER BY last_session_date DESC`,
       [mentorId]
@@ -616,7 +629,7 @@ export const getMyMentorProfile = async (req: AuthRequest, res: Response) => {
   const client = await pgPool.connect();
 
   try {
-    // ⭐ SINGLE QUERY (mentor + user + documents together)
+
     const { rows } = await client.query(
       `SELECT 
          m.id,
@@ -653,7 +666,6 @@ export const getMyMentorProfile = async (req: AuthRequest, res: Response) => {
 
     const mentor = rows[0];
 
-    // ⭐ expertise
     const { rows: expertiseRows } = await client.query(
       `SELECT e.id, e.name
        FROM mentor_expertise me
@@ -664,7 +676,6 @@ export const getMyMentorProfile = async (req: AuthRequest, res: Response) => {
 
     mentor.expertise = expertiseRows || [];
 
-    // ⭐ clean documents mapping (SAFE)
     mentor.documents = [
       mentor.citizenship_id_url && {
         name: "Citizenship",

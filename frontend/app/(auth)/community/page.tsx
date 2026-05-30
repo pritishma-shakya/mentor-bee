@@ -6,16 +6,17 @@ import { toast } from "react-hot-toast";
 import {
   ThumbsUp,
   ThumbsDown,
-  User as UserIcon,
   MessageCircle,
   Search,
   X,
   Plus,
   Flame,
-  Clock,
   Check,
-  Image as ImageIcon
+  Image as ImageIcon,
+  MoreVertical,
+  Flag
 } from "lucide-react";
+import { ReportModal } from "../../../components/report-modal";
 
 interface User {
   id: string;
@@ -37,6 +38,7 @@ interface Comment {
 interface Post {
   id: string;
   author: string;
+  author_id?: string;
   author_role?: "student" | "mentor";
   profile_picture?: string;
   time: string;
@@ -66,6 +68,8 @@ export default function CommunityPage() {
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [newTagInput, setNewTagInput] = useState("");
   const [showNewTagInput, setShowNewTagInput] = useState(false);
+  const [activeTab, setActiveTab] = useState<"all" | "my-posts">("all");
+  const [myPosts, setMyPosts] = useState<Post[]>([]);
 
   const [showCreate, setShowCreate] = useState(false);
   const [newPostContent, setNewPostContent] = useState("");
@@ -73,6 +77,7 @@ export default function CommunityPage() {
   const [newPostImagePreviews, setNewPostImagePreviews] = useState<string[]>([]);
   const [newPostTag, setNewPostTag] = useState("");
   const [isPublishing, setIsPublishing] = useState(false);
+  const [reportTarget, setReportTarget] = useState<{ id: string; name: string; evidenceUrl?: string } | null>(null);
 
   // ---------------- Fetch Data ----------------
   useEffect(() => {
@@ -131,10 +136,24 @@ export default function CommunityPage() {
       }
     };
 
+    const fetchMyPosts = async () => {
+      try {
+        const res = await fetch("http://localhost:5000/api/community/posts/me", {
+          credentials: "include",
+        });
+        if (!res.ok) throw new Error("Failed to fetch my posts");
+        const data = await res.json();
+        setMyPosts(data.data || []);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
     fetchUser();
     fetchPosts();
     fetchTags();
     fetchContributors();
+    fetchMyPosts();
   }, []);
 
   const handleImageUpload = (e: ChangeEvent<HTMLInputElement>) => {
@@ -237,11 +256,11 @@ export default function CommunityPage() {
         posts.map((p) =>
           p.id === postId
             ? {
-                ...p,
-                likes: data.data.likes,
-                dislikes: data.data.dislikes,
-                user_reaction: p.user_reaction === "like" ? null : "like",
-              }
+              ...p,
+              likes: data.data.likes,
+              dislikes: data.data.dislikes,
+              user_reaction: p.user_reaction === "like" ? null : "like",
+            }
             : p
         )
       );
@@ -266,11 +285,11 @@ export default function CommunityPage() {
         posts.map((p) =>
           p.id === postId
             ? {
-                ...p,
-                likes: data.data.likes,
-                dislikes: data.data.dislikes,
-                user_reaction: p.user_reaction === "dislike" ? null : "dislike",
-              }
+              ...p,
+              likes: data.data.likes,
+              dislikes: data.data.dislikes,
+              user_reaction: p.user_reaction === "dislike" ? null : "dislike",
+            }
             : p
         )
       );
@@ -350,6 +369,28 @@ export default function CommunityPage() {
               className="px-4 py-3 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700 transition"
             >
               + Create Post
+            </button>
+          </div>
+
+          {/* Tabs */}
+          <div className="flex border-b border-gray-200 mb-4 bg-white rounded-t-lg">
+            <button
+              onClick={() => setActiveTab("all")}
+              className={`px-6 py-3 text-sm font-bold transition-all border-b-2 ${activeTab === "all"
+                  ? "border-orange-600 text-orange-600 bg-orange-50/30"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                }`}
+            >
+              All Community
+            </button>
+            <button
+              onClick={() => setActiveTab("my-posts")}
+              className={`px-6 py-3 text-sm font-bold transition-all border-b-2 ${activeTab === "my-posts"
+                  ? "border-orange-600 text-orange-600 bg-orange-50/30"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                }`}
+            >
+              My Posts
             </button>
           </div>
 
@@ -495,13 +536,13 @@ export default function CommunityPage() {
 
           {/* Posts */}
           <div className="space-y-4">
-            {posts.length > 0 ? (
-              posts
+            {(activeTab === "all" ? posts : myPosts).length > 0 ? (
+              (activeTab === "all" ? posts : myPosts)
                 .filter((p) => {
                   const matchTag = selectedTag === "" || p.tag === selectedTag;
                   const searchLower = searchQuery.toLowerCase();
-                  const matchSearch = 
-                    searchQuery === "" || 
+                  const matchSearch =
+                    searchQuery === "" ||
                     p.content.toLowerCase().includes(searchLower) ||
                     p.author.toLowerCase().includes(searchLower) ||
                     (p.tag && p.tag.toLowerCase().includes(searchLower));
@@ -515,6 +556,9 @@ export default function CommunityPage() {
                     onLike={handleLike}
                     onDislike={handleDislike}
                     onAddComment={handleAddComment}
+                    onReport={(reportedId, reportedName, evidenceUrl) => {
+                      setReportTarget({ id: reportedId, name: reportedName, evidenceUrl });
+                    }}
                   />
                 ))
             ) : (
@@ -590,6 +634,15 @@ export default function CommunityPage() {
           </div>
         </div>
       </div>
+      {reportTarget && (
+        <ReportModal
+          isOpen={!!reportTarget}
+          onClose={() => setReportTarget(null)}
+          reportedUserId={reportTarget.id}
+          reportedUserName={reportTarget.name}
+          evidenceUrl={reportTarget.evidenceUrl}
+        />
+      )}
     </AuthLayout>
   );
 }
@@ -601,6 +654,7 @@ interface PostCardProps {
   onLike: (postId: string) => void;
   onDislike: (postId: string) => void;
   onAddComment: (postId: string, content: string) => void;
+  onReport: (userId: string, userName: string, evidenceUrl?: string) => void;
 }
 function formatTime(timestamp: string) {
   const time = new Date(timestamp);
@@ -614,9 +668,10 @@ function formatTime(timestamp: string) {
   return time.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
-function PostCard({ post, user, onLike, onDislike, onAddComment }: PostCardProps) {
+function PostCard({ post, user, onLike, onDislike, onAddComment, onReport }: PostCardProps) {
   const [showCommentInput, setShowCommentInput] = useState(false);
   const [newComment, setNewComment] = useState("");
+  const [showMenu, setShowMenu] = useState(false);
 
   const isLiked = post.user_reaction === "like";
   const isDisliked = post.user_reaction === "dislike";
@@ -625,6 +680,23 @@ function PostCard({ post, user, onLike, onDislike, onAddComment }: PostCardProps
     if (!newComment.trim()) return;
     onAddComment(post.id, newComment.trim());
     setNewComment("");
+  };
+
+  const handleReportClick = () => {
+    setShowMenu(false);
+    if (!user) {
+      toast.error("Please log in to report a post");
+      return;
+    }
+    if (!post.author_id) {
+      toast.error("Unable to report this post because the author could not be identified");
+      return;
+    }
+    if (post.author_id && post.author_id === user.id) {
+      toast.error("You cannot report your own post");
+      return;
+    }
+    onReport(post.author_id, post.author, `community-post:${post.id}`);
   };
 
   return (
@@ -653,21 +725,58 @@ function PostCard({ post, user, onLike, onDislike, onAddComment }: PostCardProps
         </div>
 
         {/* Name + Time */}
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <p className="font-semibold text-gray-900 text-sm">{post.author}</p>
           <p className="text-xs text-gray-500">{formatTime(post.time)}</p>
         </div>
 
-        {/* Tags on the right */}
+        {/* Tag */}
         {post.tag && (
-          <div className="flex flex-wrap gap-1 justify-end max-w-[40%]">
-            <span
-              className="text-xs px-2 py-0.5 rounded-full border border-orange-300 text-orange-600 bg-orange-50 whitespace-nowrap"
-            >
-              {post.tag}
-            </span>
-          </div>
+          <span className="text-xs px-2 py-0.5 rounded-full border border-orange-300 text-orange-600 bg-orange-50 whitespace-nowrap flex-shrink-0">
+            {post.tag}
+          </span>
         )}
+
+        {/* 3-dot Menu */}
+        <div className="relative flex-shrink-0">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              setShowMenu(!showMenu);
+            }}
+            className="p-1.5 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
+            title="More options"
+          >
+            <MoreVertical className="w-4 h-4 text-gray-400" />
+          </button>
+
+          {showMenu && (
+            <>
+              {/* Invisible overlay to close dropdown */}
+              <div
+                className="fixed inset-0 z-[50]"
+                onClick={() => setShowMenu(false)}
+              />
+              {/* Dropdown */}
+              <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-[51] min-w-[140px] py-1">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    handleReportClick();
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2"
+                >
+                  <Flag className="w-4 h-4" />
+                  Report Post
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
 
@@ -702,7 +811,7 @@ function PostCard({ post, user, onLike, onDislike, onAddComment }: PostCardProps
               : "text-gray-500 hover:text-green-600 hover:bg-green-50"
               }`}
           >
-          <ThumbsUp className="w-4 h-4" />
+            <ThumbsUp className="w-4 h-4" />
           </button>
           <span className="text-xs text-gray-600">{post.likes}</span>
         </div>

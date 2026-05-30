@@ -12,8 +12,11 @@ import {
     CheckCircle,
     XCircle,
     Play,
-    ChevronLeft
+    ChevronLeft,
+    Flag,
+    Navigation
 } from "lucide-react";
+import { ReportModal } from "./report-modal";
 import Link from "next/link";
 import { isSessionActive, getNepalNow, parseNepalDateTime, toNepaliDateStr } from "@/utils/dateUtils";
 
@@ -76,6 +79,7 @@ export default function MentorSessionCard({
     const [expanded, setExpanded] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
     const [confirmType, setConfirmType] = useState<"reject" | "cancel" | null>(null);
+    const [showReportModal, setShowReportModal] = useState(false);
 
     // Reschedule states
     const [showRescheduleModal, setShowRescheduleModal] = useState(false);
@@ -259,6 +263,16 @@ export default function MentorSessionCard({
                             Message
                         </Link>
 
+                        {session.type === "In-Person" && session.location && (
+                            <Link
+                                href={`/mentor/session-route/${session.id}`}
+                                className={`${isExpanded ? 'px-6 py-2' : 'px-4 py-1.5'} border border-blue-200 text-blue-700 hover:bg-blue-50 rounded-lg font-medium ${isExpanded ? 'text-sm' : 'text-xs'} flex items-center justify-center gap-2 transition shadow-sm bg-white`}
+                            >
+                                <Navigation className={`${isExpanded ? 'w-4 h-4' : 'w-3.5 h-3.5'}`} />
+                                View Map
+                            </Link>
+                        )}
+
                         {/* RESCHEDULE button */}
                         {["Accepted", "Pending"].includes(session.status) && (
                             <button 
@@ -295,6 +309,13 @@ export default function MentorSessionCard({
                         )}
                     </>
                 )}
+
+                <button
+                    onClick={() => setShowReportModal(true)}
+                    className={`${isExpanded ? 'px-4 py-2 text-sm' : 'px-4 py-1.5 text-[11px]'} text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg font-medium transition flex items-center gap-2 border border-transparent hover:border-red-100`}
+                >
+                    <Flag className={isExpanded ? "w-4 h-4" : "w-3.5 h-3.5"} /> Report
+                </button>
             </div>
         );
     };
@@ -593,6 +614,14 @@ export default function MentorSessionCard({
                     </div>
                 </div>
             )}
+
+            <ReportModal
+                isOpen={showReportModal}
+                onClose={() => setShowReportModal(false)}
+                reportedUserId={session.student_id}
+                reportedUserName={session.student_name}
+            />
+
         </div>
     );
 }

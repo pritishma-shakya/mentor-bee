@@ -5,7 +5,6 @@ import cloudinary from "../config/cloudinary";
 import { createNotification } from "../utils/notificationService";
 import { addPoints } from "../utils/rewardsService";
 
-// ---------------- Posts ----------------
 export const getPosts = async (_req: AuthRequest, res: Response) => {
   const client = await pgPool.connect();
   try {
@@ -18,6 +17,7 @@ export const getPosts = async (_req: AuthRequest, res: Response) => {
         p.dislikes_count AS dislikes,
         p.trending,
         p.created_at AS time,
+        p.author_id,
         u.name AS author,
         u.profile_picture,
         u.role AS author_role,
@@ -31,7 +31,7 @@ export const getPosts = async (_req: AuthRequest, res: Response) => {
               'content', c.content,
               'created_at', c.created_at
             )
-          ) FILTER (WHERE c.id IS NOT NULL),
+          ) FILTER (WHERE c.id IS NOT NULL AND cu.id IS NOT NULL),
           '[]'
         ) AS comments,
         COALESCE(
@@ -40,10 +40,12 @@ export const getPosts = async (_req: AuthRequest, res: Response) => {
         ) AS images
       FROM posts p
       JOIN users u ON u.id = p.author_id
+        AND COALESCE(u.status, 'active') NOT IN ('suspended', 'banned')
       LEFT JOIN comments c ON c.post_id = p.id
       LEFT JOIN users cu ON cu.id = c.author_id
+        AND COALESCE(cu.status, 'active') NOT IN ('suspended', 'banned')
       LEFT JOIN post_images pi ON pi.post_id = p.id
-      GROUP BY p.id, u.name, u.profile_picture, u.role, p.content, p.tag, p.likes_count, p.dislikes_count, p.trending, p.created_at
+      GROUP BY p.id, p.author_id, u.name, u.profile_picture, u.role, p.content, p.tag, p.likes_count, p.dislikes_count, p.trending, p.created_at
       ORDER BY p.created_at DESC
     `,
       [_req.user?.id || null]
@@ -52,6 +54,65 @@ export const getPosts = async (_req: AuthRequest, res: Response) => {
     res.json({ success: true, data: rows });
   } catch (err) {
     console.error("getPosts error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  } finally {
+    client.release();
+  }
+};
+
+export const getMyPosts = async (req: AuthRequest, res: Response) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+
+  const client = await pgPool.connect();
+  try {
+    const { rows } = await client.query(`
+      SELECT 
+        p.id,
+        p.content,
+        p.tag,
+        p.likes_count AS likes,
+        p.dislikes_count AS dislikes,
+        p.trending,
+        p.created_at AS time,
+        p.author_id,
+        u.name AS author,
+        u.profile_picture,
+        u.role AS author_role,
+        (SELECT type FROM post_likes WHERE post_id = p.id AND user_id = $1) AS user_reaction,
+        COALESCE(
+          json_agg(
+            json_build_object(
+              'id', c.id,
+              'author', cu.name,
+              'profile_picture', cu.profile_picture,
+              'content', c.content,
+              'created_at', c.created_at
+            )
+          ) FILTER (WHERE c.id IS NOT NULL AND cu.id IS NOT NULL),
+          '[]'
+        ) AS comments,
+        COALESCE(
+          json_agg(pi.image_url) FILTER (WHERE pi.id IS NOT NULL),
+          '[]'
+        ) AS images
+      FROM posts p
+      JOIN users u ON u.id = p.author_id
+        AND COALESCE(u.status, 'active') NOT IN ('suspended', 'banned')
+      LEFT JOIN comments c ON c.post_id = p.id
+      LEFT JOIN users cu ON cu.id = c.author_id
+        AND COALESCE(cu.status, 'active') NOT IN ('suspended', 'banned')
+      LEFT JOIN post_images pi ON pi.post_id = p.id
+      WHERE p.author_id = $1
+      GROUP BY p.id, p.author_id, u.name, u.profile_picture, u.role, p.content, p.tag, p.likes_count, p.dislikes_count, p.trending, p.created_at
+      ORDER BY p.created_at DESC
+    `,
+      [userId]
+    );
+
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error("getMyPosts error:", err);
     res.status(500).json({ success: false, message: "Internal server error" });
   } finally {
     client.release();
@@ -82,7 +143,6 @@ export const createPost = async (req: AuthRequest, res: Response) => {
     const postId = rows[0].id;
     const imageUrls: string[] = [];
 
-    // Upload images to Cloudinary
     if (files && files.length > 0) {
       for (const file of files) {
         const uploadResult = await new Promise<any>((resolve, reject) => {
@@ -102,7 +162,6 @@ export const createPost = async (req: AuthRequest, res: Response) => {
         imageUrls.push(uploadResult.secure_url);
       }
 
-      // Insert image URLs into database
       const insertPromises = imageUrls.map((url: string) =>
         client.query(`INSERT INTO post_images (post_id, image_url) VALUES ($1, $2)`, [postId, url])
       );
@@ -111,7 +170,6 @@ export const createPost = async (req: AuthRequest, res: Response) => {
 
     await client.query("COMMIT");
 
-    // Give points for creating a post
     try {
       if (req.user.role === "student") {
         await addPoints(req.user.id, 5, "Created a community post");
@@ -123,6 +181,7 @@ export const createPost = async (req: AuthRequest, res: Response) => {
       data: {
         ...rows[0],
         author: req.user.name,
+        author_id: req.user.id,
         profile_picture: req.user.profile_picture,
         author_role: req.user.role,
         comments: [],
@@ -138,10 +197,9 @@ export const createPost = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// ---------------- Reactions ----------------
 export const reactToPost = async (req: AuthRequest, res: Response) => {
   const { postId } = req.params;
-  const { type } = req.body; // "like" or "dislike"
+  const { type } = req.body; 
   if (!req.user) return res.status(401).json({ success: false, message: "Unauthorized" });
   if (!["like", "dislike"].includes(type)) return res.status(400).json({ success: false, message: "Invalid reaction type" });
 
@@ -149,7 +207,20 @@ export const reactToPost = async (req: AuthRequest, res: Response) => {
   try {
     await client.query("BEGIN");
 
-    // Check existing reaction
+    const { rowCount: visiblePostCount } = await client.query(
+      `SELECT 1
+       FROM posts p
+       JOIN users u ON u.id = p.author_id
+       WHERE p.id = $1
+         AND COALESCE(u.status, 'active') NOT IN ('suspended', 'banned')`,
+      [postId]
+    );
+
+    if (visiblePostCount === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ success: false, message: "Post not found" });
+    }
+
     const { rows: existingReaction } = await client.query(
       "SELECT id, type FROM post_likes WHERE post_id = $1 AND user_id = $2",
       [postId, req.user.id]
@@ -159,12 +230,12 @@ export const reactToPost = async (req: AuthRequest, res: Response) => {
       const oldType = existingReaction[0].type;
       
       if (oldType === type) {
-        // Toggle OFF: same type clicked again
+        
         await client.query("DELETE FROM post_likes WHERE id = $1", [existingReaction[0].id]);
         const field = type === "like" ? "likes_count" : "dislikes_count";
         await client.query(`UPDATE posts SET ${field} = GREATEST(0, ${field} - 1) WHERE id = $1`, [postId]);
       } else {
-        // SWITCH: different type clicked
+        
         await client.query("UPDATE post_likes SET type = $1 WHERE id = $2", [type, existingReaction[0].id]);
         
         const removeField = oldType === "like" ? "likes_count" : "dislikes_count";
@@ -176,7 +247,7 @@ export const reactToPost = async (req: AuthRequest, res: Response) => {
           WHERE id = $1`, [postId]);
       }
     } else {
-      // NEW REACTION
+      
       await client.query(
         "INSERT INTO post_likes (post_id, user_id, type) VALUES ($1, $2, $3)",
         [postId, req.user.id, type]
@@ -200,7 +271,6 @@ export const reactToPost = async (req: AuthRequest, res: Response) => {
 
     res.json({ success: true, data: { ...updatedPost[0], user_reaction } });
 
-    // Send Notification only for new likes
     if (type === "like" && existingReaction.length === 0) {
       const io = req.app.get("io");
       const { rows: authorRows } = await client.query(`SELECT author_id, content FROM posts WHERE id = $1`, [postId]);
@@ -224,7 +294,6 @@ export const reactToPost = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// ---------------- Comments ----------------
 export const addComment = async (req: AuthRequest, res: Response) => {
   const { postId } = req.params;
   const { content } = req.body;
@@ -233,6 +302,19 @@ export const addComment = async (req: AuthRequest, res: Response) => {
 
   const client = await pgPool.connect();
   try {
+    const { rowCount: visiblePostCount } = await client.query(
+      `SELECT 1
+       FROM posts p
+       JOIN users u ON u.id = p.author_id
+       WHERE p.id = $1
+         AND COALESCE(u.status, 'active') NOT IN ('suspended', 'banned')`,
+      [postId]
+    );
+
+    if (visiblePostCount === 0) {
+      return res.status(404).json({ success: false, message: "Post not found" });
+    }
+
     const { rows } = await client.query(
       `INSERT INTO comments (post_id, author_id, content)
        VALUES ($1, $2, $3)
@@ -243,14 +325,12 @@ export const addComment = async (req: AuthRequest, res: Response) => {
     const comment = rows[0];
     res.json({ success: true, data: { ...comment, author: req.user.name, profile_picture: req.user.profile_picture } });
 
-    // Give points for commenting
     try {
       if (req.user.role === "student") {
         await addPoints(req.user.id, 2, "Commented on a community post");
       }
     } catch (e) { console.error("Error giving comment points", e); }
 
-    // Send Notification to Post Author
     const io = req.app.get("io");
     const { rows: authorRows } = await client.query(`SELECT author_id, content FROM posts WHERE id = $1`, [postId]);
     if (authorRows.length && authorRows[0].author_id !== req.user.id) {
@@ -271,7 +351,6 @@ export const addComment = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// ---------------- Tags ----------------
 export const getTags = async (_req: AuthRequest, res: Response) => {
   const client = await pgPool.connect();
   try {
@@ -310,6 +389,7 @@ export const getTopContributors = async (_req: AuthRequest, res: Response) => {
               (SELECT COUNT(*) FROM comments WHERE author_id = u.id) as interaction_count
        FROM users u
        WHERE u.id IN (SELECT author_id FROM posts UNION SELECT author_id FROM comments)
+         AND COALESCE(u.status, 'active') NOT IN ('suspended', 'banned')
        ORDER BY interaction_count DESC
        LIMIT 5`
     );

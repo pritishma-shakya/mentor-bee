@@ -3,32 +3,41 @@ import { pgPool } from "../config/database";
 export interface Schedule {
   id: number;
   mentor_id: string;
-  date: string; // YYYY-MM-DD
-  times: string[]; // array of time slots
+  date: string; 
+  times: string[]; 
   created_at: string;
   updated_at: string;
 }
 
-// Get all schedules of a mentor
 export const getMentorSchedules = async (mentorId: string): Promise<Schedule[]> => {
-  // 1. Fetch all schedules
+  const { rowCount: visibleMentorCount } = await pgPool.query(
+    `SELECT 1
+     FROM mentors m
+     JOIN users u ON u.id = m.user_id
+     WHERE m.id = $1
+       AND m.status = 'accepted'
+       AND COALESCE(u.status, 'active') NOT IN ('suspended', 'banned')`,
+    [mentorId]
+  );
+
+  if (visibleMentorCount === 0) {
+    return [];
+  }
+
   const { rows: schedules } = await pgPool.query(
     `SELECT * FROM schedules WHERE mentor_id=$1 ORDER BY date ASC`,
     [mentorId]
   );
 
-  // 2. Fetch all booked sessions for this mentor that are NOT cancelled or rejected
   const { rows: sessions } = await pgPool.query(
     `SELECT date, time FROM sessions WHERE mentor_id=$1 AND status NOT IN ('Cancelled', 'Rejected')`,
     [mentorId]
   );
 
-  // 3. Map through schedules and filter out booked times
   return schedules.map(r => {
     const rawTimes = typeof r.times === "string" ? JSON.parse(r.times) : r.times;
-    const scheduleDate = r.date; // Note: Ensure this matches the session date format
+    const scheduleDate = r.date; 
 
-    // Helper to get YYYY-MM-DD from a Date object without timezone shift
     const formatDate = (date: any) => {
       const d = new Date(date);
       const year = d.getFullYear();
@@ -37,7 +46,6 @@ export const getMentorSchedules = async (mentorId: string): Promise<Schedule[]> 
       return `${year}-${month}-${day}`;
     };
 
-    // Helper to normalize time strings (e.g., "3:00 PM" or "15:00:00" -> "15:00")
     const normalizeTime = (time: string) => {
       const t = time.trim().toLowerCase();
       let hours = 0, minutes = 0;
@@ -58,7 +66,6 @@ export const getMentorSchedules = async (mentorId: string): Promise<Schedule[]> 
       return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
     };
 
-    // Filter out times that exist in sessions for this date
     const filteredTimes = rawTimes.filter((t: string) => {
       return !sessions.some((s: any) => {
         const sessionDateStr = formatDate(s.date);
@@ -71,7 +78,6 @@ export const getMentorSchedules = async (mentorId: string): Promise<Schedule[]> 
   });
 };
 
-// Add or update schedule for a date
 export const upsertSchedule = async (
   mentorId: string,
   date: string,
@@ -79,7 +85,7 @@ export const upsertSchedule = async (
   originalDate?: string
 ): Promise<Schedule> => {
   if (originalDate && originalDate !== date) {
-    // Update existing row to new date
+    
     const { rows } = await pgPool.query(
       `UPDATE schedules
        SET date=$1, times=$2, updated_at=now()
@@ -89,7 +95,7 @@ export const upsertSchedule = async (
     );
     return rows[0];
   } else {
-    // Insert or upsert
+    
     const { rows } = await pgPool.query(
       `INSERT INTO schedules (mentor_id, date, times)
        VALUES ($1, $2, $3)
@@ -102,7 +108,6 @@ export const upsertSchedule = async (
   }
 };
 
-// Delete a schedule for a date
 export const deleteSchedule = async (mentorId: string, date: string): Promise<void> => {
   await pgPool.query(
     `DELETE FROM schedules WHERE mentor_id=$1 AND date=$2`,

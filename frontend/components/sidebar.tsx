@@ -16,6 +16,8 @@ import {
   BarChart3,
   Shield,
   Tag,
+  History,
+  Flag,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import toast from "react-hot-toast";
@@ -77,6 +79,7 @@ export default function Sidebar() {
     { icon: MessageCircle, label: "Messages", path: "/messages" },
     { icon: Users, label: "My Community", path: "/community" },
     { icon: Trophy, label: "Rewards", path: "/rewards" },
+    { icon: History, label: "Transactions", path: "/transactions" },
     { icon: Settings, label: "Settings", path: "/settings" },
   ];
 
@@ -99,6 +102,7 @@ export default function Sidebar() {
     { icon: Calendar, label: "All Sessions", path: "/admin/sessions" },
     { icon: DollarSign, label: "Revenue", path: "/admin/revenue" },
     { icon: Tag, label: "Promo Codes", path: "/admin/promo-codes" },
+    { icon: Flag, label: "Reports", path: "/admin/reports" },
     { icon: Settings, label: "System Settings", path: "/admin/settings" },
   ];
 

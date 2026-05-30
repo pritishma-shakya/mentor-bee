@@ -49,9 +49,10 @@ router.post("/:conversationId?/messages", authenticate, async (req: AuthRequest,
     }
 
     res.json({ success: true, data: msg });
-  } catch (err) {
+  } catch (err: any) {
     console.error(err);
-    res.status(500).json({ success: false, message: "Failed to send message" });
+    const status = err.message === "Forbidden" ? 403 : err.message === "User unavailable" ? 404 : 500;
+    res.status(status).json({ success: false, message: status === 500 ? "Failed to send message" : err.message });
   }
 });
 
@@ -71,6 +72,18 @@ router.post("/start", authenticate, async (req: AuthRequest, res) => {
   try {
     const { mentor_id } = req.body;
     if (!mentor_id) return res.status(400).json({ success: false, message: "Mentor ID is required" });
+
+    const { rowCount: activeRecipientCount } = await pgPool.query(
+      `SELECT 1
+       FROM users
+       WHERE id = $1
+         AND COALESCE(status, 'active') NOT IN ('suspended', 'banned')`,
+      [mentor_id]
+    );
+
+    if (activeRecipientCount === 0) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
 
     // Check if conversation already exists between current user and mentor
     const { rows } = await pgPool.query(

@@ -8,6 +8,7 @@ import { Star, Clock, Calendar, ChevronDown } from "lucide-react";
 
 interface Mentor {
   id: string;
+  user_id?: string;
   full_name: string;
   expertise: { id: string; name: string }[];
   hourly_rate: string;
@@ -167,6 +168,7 @@ export default function ExplorePage() {
               key={m.id}
               mentor={{
                 id: m.id,
+                user_id: m.user_id,
                 name: m.full_name,
                 expertise: m.expertise.map((e) => e.name).join(", "),
                 profile_picture: m.profile_picture,

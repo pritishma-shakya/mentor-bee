@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import Illustration from "@/components/illustration";
 import Button from "@/components/button";
 import InputField from "@/components/input";
@@ -10,19 +11,29 @@ import { Check, X } from "lucide-react";
 
 type Role = "student" | "mentor";
 
-export default function SignUpPage() {
+function SignUpForm() {
+  const searchParams = useSearchParams();
   const [role, setRole] = useState<Role>("student");
+
+  useEffect(() => {
+    const roleParam = searchParams.get("role");
+    if (roleParam === "mentor" || roleParam === "student") {
+      setRole(roleParam);
+    }
+  }, [searchParams]);
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const [nameError, setNameError] = useState("");
   const [emailError, setEmailError] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [confirmPasswordError, setConfirmPasswordError] = useState("");
+  const [termsError, setTermsError] = useState("");
   const [generalError, setGeneralError] = useState("");
   const [verificationSent, setVerificationSent] = useState(false);
 
@@ -59,6 +70,7 @@ export default function SignUpPage() {
     setEmailError("");
     setPasswordError("");
     setConfirmPasswordError("");
+    setTermsError("");
     setGeneralError("");
 
     let hasError = false;
@@ -85,6 +97,11 @@ export default function SignUpPage() {
       hasError = true;
     }
 
+    if (!termsAccepted) {
+      setTermsError("Please accept the Terms and Conditions");
+      hasError = true;
+    }
+
     if (hasError) return;
 
     setLoading(true);
@@ -94,7 +111,7 @@ export default function SignUpPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include", 
-        body: JSON.stringify({ name, email, password, role }),
+        body: JSON.stringify({ name, email, password, role, termsAccepted }),
       });
 
       const data = await res.json();
@@ -116,8 +133,8 @@ export default function SignUpPage() {
       localStorage.setItem("role", role);
       window.location.href = role === "mentor" ? "/setup" : "/home";
 
-    } catch (error: any) {
-      setGeneralError(error.message || "Something went wrong");
+    } catch (error: unknown) {
+      setGeneralError(error instanceof Error ? error.message : "Something went wrong");
     } finally {
       setLoading(false);
     }
@@ -133,7 +150,7 @@ export default function SignUpPage() {
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-4">Check Your Email</h2>
           <p className="text-gray-600 mb-8">
-            We've successfully sent a secure verification link to <br/><span className="font-semibold text-gray-900">{email}</span> 
+            We&apos;ve successfully sent a secure verification link to <br/><span className="font-semibold text-gray-900">{email}</span> 
             <br/><br/>Please click the button inside the email to dynamically activate your account and break the login lock.
           </p>
           <a href="/login" className="inline-block px-10 py-3 bg-orange-600 text-white font-bold rounded-lg hover:bg-orange-700 shadow-sm transition">
@@ -240,6 +257,25 @@ export default function SignUpPage() {
               />
               {confirmPasswordError && <p className="text-red-500 text-xs">{confirmPasswordError}</p>}
 
+              <div className="space-y-1">
+                <label className="flex items-start gap-2 text-xs text-gray-600 leading-relaxed">
+                  <input
+                    type="checkbox"
+                    checked={termsAccepted}
+                    onChange={(e) => setTermsAccepted(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+                  />
+                  <span>
+                    I agree to the{" "}
+                    <a href="/terms" className="font-semibold text-orange-600 hover:underline" target="_blank">
+                      Terms and Conditions
+                    </a>
+                    .
+                  </span>
+                </label>
+                {termsError && <p className="text-red-500 text-xs">{termsError}</p>}
+              </div>
+
               {generalError && <p className="text-red-500 text-xs">{generalError}</p>}
 
               <Button
@@ -273,5 +309,17 @@ export default function SignUpPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function SignUpPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-pink-50 flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-orange-200 border-t-orange-600 rounded-full animate-spin"></div>
+      </div>
+    }>
+      <SignUpForm />
+    </Suspense>
   );
 }

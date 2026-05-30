@@ -6,6 +6,14 @@ import { toast } from "react-hot-toast";
 import { Tag, Plus, Calendar, Percent, Hash, CheckCircle, XCircle, Clock, Trash2 } from "lucide-react";
 import { getTimeRemaining } from "../../../../utils/dateUtils";
 
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: "mentor";
+  status?: "pending" | "accepted" | "rejected" | "suspended" | "banned" | "warned";
+}
+
 interface PromoCode {
     id: string;
     code: string;
@@ -52,6 +60,16 @@ export default function MentorPromoCodesPage() {
     useEffect(() => {
         fetchPromoCodes();
     }, []);
+
+
+    const [user, setUser] = useState<User | null>(null);
+    
+      useEffect(() => {
+        fetch("http://localhost:5000/api/auth/profile", { credentials: "include" })
+          .then(res => res.json())
+          .then(data => setUser(data.user))
+          .catch(console.error);
+      }, []);
 
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -134,10 +152,12 @@ export default function MentorPromoCodesPage() {
                 {status.charAt(0).toUpperCase() + status.slice(1)}
             </span>
         );
+
+        
     };
 
     return (
-        <AuthLayout header={{ title: "Promo Codes", subtitle: "Create and manage discounts for your sessions" }}>
+        <AuthLayout header={{ title: "Promo Codes", subtitle: "Create and manage discounts for your sessions", user: user }}>
             <div className="p-4 space-y-6">
 
                 {/* Header Actions */}

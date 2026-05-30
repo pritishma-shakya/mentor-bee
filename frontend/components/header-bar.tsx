@@ -10,6 +10,7 @@ interface UserProps {
   email: string;
   role: "student" | "mentor" | "admin";
   profile_picture?: string;
+  status?: "pending" | "accepted" | "rejected" | "suspended" | "banned" | "warned";
 }
 
 export interface HeaderBarProps {

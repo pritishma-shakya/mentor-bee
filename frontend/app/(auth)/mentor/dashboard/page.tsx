@@ -11,7 +11,7 @@ interface User {
   name: string;
   email: string;
   role: "mentor";
-  status?: "pending" | "accepted" | "rejected" | "suspended";
+  status?: "pending" | "accepted" | "rejected" | "suspended" | "banned" | "warned";
 }
 
 interface RecentSession {
@@ -58,6 +58,10 @@ export default function MentorDashboard() {
         if (!res.ok) throw new Error("Failed to fetch user");
         const data = await res.json();
         setUser(data.user);
+        
+        if (data.user?.role === "mentor" && data.user?.status === "not_setup") {
+          window.location.href = "/setup";
+        }
       } catch (err) {
         console.error(err);
         toast.error("Please log in again");
@@ -132,22 +136,15 @@ export default function MentorDashboard() {
 
       {user.status === "pending" && (
         <div className="mt-5">
-          <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded-md">
-            Your mentor account is waiting for admin approval.
+          <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded-md font-medium text-sm">
+            Your mentor application is currently being reviewed by our administration.
           </div>
         </div>
       )}
       {user.status === "rejected" && (
         <div className="mt-5">
-          <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md">
-            Your mentor account has been rejected. Please contact admin.
-          </div>
-        </div>
-      )}
-      {user.status === "suspended" && (
-        <div className="mt-5">
-          <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md">
-            Your mentor account has been suspended. Please contact admin.
+          <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md font-medium text-sm">
+            Your mentor application has been rejected. Please contact support for more details.
           </div>
         </div>
       )}
@@ -216,15 +213,14 @@ export default function MentorDashboard() {
                       <p className="text-xs text-gray-500">{formatDate(s.date)}</p>
                       <p className="text-xs text-gray-400">{formatTime(s.time)}</p>
                       <span
-                        className={`text-[10px] font-semibold px-2 py-0.5 rounded-full mt-0.5 inline-block ${
-                          s.status === "Accepted"
+                        className={`text-[10px] font-semibold px-2 py-0.5 rounded-full mt-0.5 inline-block ${s.status === "Accepted"
                             ? "bg-green-100 text-green-700"
                             : s.status === "Pending"
-                            ? "bg-yellow-100 text-yellow-700"
-                            : s.status === "Cancelled"
-                            ? "bg-red-100 text-red-700"
-                            : "bg-gray-100 text-gray-600"
-                        }`}
+                              ? "bg-yellow-100 text-yellow-700"
+                              : s.status === "Cancelled"
+                                ? "bg-red-100 text-red-700"
+                                : "bg-gray-100 text-gray-600"
+                          }`}
                       >
                         {s.status}
                       </span>

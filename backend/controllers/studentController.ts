@@ -2,8 +2,6 @@ import { Response } from "express";
 import { pgPool } from "../config/database";
 import { AuthRequest } from "../middlewares/authMiddleware";
 
-/* ===================== Helper ===================== */
-
 const requireStudent = (req: AuthRequest, res: Response): boolean => {
   if (!req.user || req.user.role !== "student") {
     res.status(403).json({ success: false, message: "Forbidden" });
@@ -11,8 +9,6 @@ const requireStudent = (req: AuthRequest, res: Response): boolean => {
   }
   return true;
 };
-
-/* ===================== Profile ===================== */
 
 export const getStudentProfile = async (req: AuthRequest, res: Response) => {
   if (!requireStudent(req, res)) return;
@@ -38,8 +34,6 @@ export const getStudentProfile = async (req: AuthRequest, res: Response) => {
     client.release();
   }
 };
-
-/* ===================== Learning Goals ===================== */
 
 export const getLearningGoals = async (req: AuthRequest, res: Response) => {
   if (!requireStudent(req, res)) return;
@@ -122,8 +116,6 @@ export const updateLearningGoal = async (req: AuthRequest, res: Response) => {
   }
 };
 
-/* ===================== Rewards (SUMMARY) ===================== */
-
 export const getRewards = async (req: AuthRequest, res: Response) => {
   if (!requireStudent(req, res)) return;
 
@@ -176,8 +168,6 @@ export const getRewards = async (req: AuthRequest, res: Response) => {
     client.release();
   }
 };
-
-/* ===================== Sessions ===================== */
 
 export const getSessions = async (req: AuthRequest, res: Response) => {
   if (!requireStudent(req, res)) return;

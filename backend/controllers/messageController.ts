@@ -23,7 +23,37 @@ export interface Message {
   participants?: string[];
 }
 
-// Get all conversations for a user
+const ACTIVE_USER_SQL = "COALESCE(status, 'active') NOT IN ('suspended', 'banned')";
+
+const ensureConversationVisible = async (conversationId: string, userId: string): Promise<void> => {
+  const { rowCount } = await pgPool.query(
+    `SELECT 1
+     FROM conversation_participants cp
+     WHERE cp.conversation_id = $1
+       AND cp.user_id = $2
+       AND NOT EXISTS (
+         SELECT 1
+         FROM conversation_participants hidden_cp
+         JOIN users hidden_u ON hidden_u.id = hidden_cp.user_id
+         WHERE hidden_cp.conversation_id = cp.conversation_id
+           AND hidden_cp.user_id != $2
+           AND COALESCE(hidden_u.status, 'active') IN ('suspended', 'banned')
+       )`,
+    [conversationId, userId]
+  );
+
+  if (rowCount === 0) throw new Error("Forbidden");
+};
+
+const ensureUserCanReceiveMessages = async (userId: string): Promise<void> => {
+  const { rowCount } = await pgPool.query(
+    `SELECT 1 FROM users WHERE id = $1 AND ${ACTIVE_USER_SQL}`,
+    [userId]
+  );
+
+  if (rowCount === 0) throw new Error("User unavailable");
+};
+
 export const getConversations = async (userId: string): Promise<Conversation[]> => {
   const { rows } = await pgPool.query(
     `
@@ -54,6 +84,7 @@ export const getConversations = async (userId: string): Promise<Conversation[]> 
       LIMIT 1
     ) m ON true
     WHERE cp.user_id = $1
+      AND COALESCE(u.status, 'active') NOT IN ('suspended', 'banned')
     ORDER BY m.created_at DESC NULLS LAST
   `,
     [userId]
@@ -64,24 +95,18 @@ export const getConversations = async (userId: string): Promise<Conversation[]> 
     mentor_id: r.mentor_id,
     mentor_name: r.mentor_name,
     mentor_picture: r.mentor_picture,
-    messages: [], // will fetch separately
+    messages: [], 
     last_message: r.last_message,
     last_time: r.last_time,
     unread_count: r.unread_count,
   }));
 };
 
-// Get messages of a conversation
 export const getConversationMessages = async (
   conversationId: string,
   userId: string
 ): Promise<Message[]> => {
-  const { rowCount } = await pgPool.query(
-    `SELECT * FROM conversation_participants WHERE conversation_id=$1 AND user_id=$2`,
-    [conversationId, userId]
-  );
-
-  if (rowCount === 0) throw new Error("Forbidden");
+  await ensureConversationVisible(conversationId, userId);
 
   const { rows } = await pgPool.query(
     `SELECT id, conversation_id, sender_id, content, created_at, is_read
@@ -94,21 +119,27 @@ export const getConversationMessages = async (
   return rows;
 };
 
-// Send a message or create a conversation if needed
 export const sendMessage = async (
   conversationId: string | null,
   senderId: string,
   content: string,
-  otherUserId?: string // mentor or student
+  otherUserId?: string 
 ): Promise<Message> => {
+  if (otherUserId) {
+    await ensureUserCanReceiveMessages(otherUserId);
+  }
+
+  if (conversationId) {
+    await ensureConversationVisible(conversationId, senderId);
+  }
+
   if (!conversationId) {
-    // Create new conversation
+    
     const { rows: convRows } = await pgPool.query(
       `INSERT INTO conversations DEFAULT VALUES RETURNING id`
     );
     conversationId = convRows[0].id;
 
-    // Add participants
     await pgPool.query(
       `INSERT INTO conversation_participants (conversation_id, user_id) VALUES ($1, $2), ($1, $3)`,
       [conversationId, senderId, otherUserId]
@@ -122,7 +153,6 @@ export const sendMessage = async (
     [conversationId, senderId, content]
   );
 
-  // Fetch participants for the conversation to help with broadcasting
   const { rows: participants } = await pgPool.query(
     `SELECT user_id FROM conversation_participants WHERE conversation_id = $1`,
     [conversationId]
@@ -133,11 +163,9 @@ export const sendMessage = async (
     participants: participants.map((p) => p.user_id),
   };
 
-  // Fetch sender name for notification
   const { rows: senderRows } = await pgPool.query(`SELECT name FROM users WHERE id = $1`, [senderId]);
   const senderName = senderRows[0]?.name || "Someone";
 
-  // Send Notifications to other participants (Non-blocking)
   const otherParticipants = (message.participants || []).filter((p: string) => p !== senderId);
   const globalIo = (global as any).io;
   
@@ -155,7 +183,6 @@ export const sendMessage = async (
   return message;
 };
 
-// Mark messages as read
 export const markMessagesAsRead = async (conversationId: string, userId: string): Promise<void> => {
   await pgPool.query(
     `UPDATE messages 

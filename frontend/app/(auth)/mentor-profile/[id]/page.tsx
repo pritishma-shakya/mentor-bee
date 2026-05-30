@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { use } from "react"; // ← This is required in Next.js 15+
-import { Globe, Clock, DollarSign, Briefcase, Users, Mail, Calendar, Star, Tag, ChevronRight } from "lucide-react";
+import { Globe, Clock, DollarSign, Briefcase, Mail, Calendar, Star, Tag, ChevronRight, MoreVertical } from "lucide-react";
 import toast from "react-hot-toast";
 import AuthLayout from "../../layout"; // adjust path
 import Link from "next/link";
+import { ReportModal } from "../../../../components/report-modal";
 
 interface Expertise {
   id: string;
@@ -67,6 +68,7 @@ export default function MentorProfilePage({ params }: { params: Promise<{ id: st
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"About" | "Reviews" | "Offers">("About");
   const [error, setError] = useState<string | null>(null);
+  const [isReportOpen, setIsReportOpen] = useState(false);
 
   useEffect(() => {
     // Debug – keep for testing
@@ -164,7 +166,15 @@ export default function MentorProfilePage({ params }: { params: Promise<{ id: st
     >
       <div className="max-w-5xl mx-auto px-4 sm:px-4 py-4 lg:py-4">
         {/* Header */}
-        <div className="flex flex-col md:flex-row items-center md:items-start gap-5 md:gap-8 mb-8">
+        <div className="relative flex flex-col md:flex-row items-center md:items-start gap-5 md:gap-8 mb-8 pr-12">
+          <button
+            onClick={() => setIsReportOpen(true)}
+            className="absolute right-0 top-0 p-2 hover:bg-gray-100 rounded-full transition-colors"
+            title="Report Mentor"
+          >
+            <MoreVertical className="w-5 h-5 text-gray-600" />
+          </button>
+
           <div className="relative flex-shrink-0">
             {mentor.profile_picture ? (
               <img
@@ -195,7 +205,6 @@ export default function MentorProfilePage({ params }: { params: Promise<{ id: st
 
               {mentor.hourly_rate && (
                 <div className="flex items-center gap-1.5 text-gray-800">
-                  <DollarSign className="w-4 h-4 text-orange-600" />
                   <span>Rs. {mentor.hourly_rate}/hr</span>
                 </div>
               )}
@@ -214,7 +223,8 @@ export default function MentorProfilePage({ params }: { params: Promise<{ id: st
               </div>
             </div>
           </div>
-        </div>        {/* Main Content */}
+        </div>
+        {/* Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
           <div className="lg:col-span-2 space-y-6">
             {/* Tabs - Mirrored from Sessions/Bookings page */}
@@ -223,11 +233,10 @@ export default function MentorProfilePage({ params }: { params: Promise<{ id: st
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab as any)}
-                  className={`pb-3 text-sm font-medium relative transition-colors whitespace-nowrap flex items-center ${
-                    activeTab === tab
-                      ? "text-orange-600 font-semibold"
-                      : "text-gray-500 hover:text-gray-800"
-                  }`}
+                  className={`pb-3 text-sm font-medium relative transition-colors whitespace-nowrap flex items-center ${activeTab === tab
+                    ? "text-orange-600 font-semibold"
+                    : "text-gray-500 hover:text-gray-800"
+                    }`}
                 >
                   {tab}
                   {tab === "Reviews" && reviews.length > 0 && (
@@ -329,8 +338,8 @@ export default function MentorProfilePage({ params }: { params: Promise<{ id: st
                           <div className="flex items-start gap-4 mb-3">
                             <div className="w-10 h-10 rounded-xl bg-orange-50 overflow-hidden flex-shrink-0 border border-orange-100">
                               {review.student_picture ? (
-                                <img 
-                                  src={review.student_picture.startsWith('http') ? review.student_picture : `http://localhost:5000${review.student_picture}`} 
+                                <img
+                                  src={review.student_picture.startsWith('http') ? review.student_picture : `http://localhost:5000${review.student_picture}`}
                                   alt={review.student_name}
                                   className="w-full h-full object-cover"
                                 />
@@ -349,9 +358,9 @@ export default function MentorProfilePage({ params }: { params: Promise<{ id: st
                               </div>
                               <div className="flex items-center gap-0.5">
                                 {[1, 2, 3, 4, 5].map((s) => (
-                                  <Star 
-                                    key={s} 
-                                    className={`w-3 h-3 ${s <= review.rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-200'}`} 
+                                  <Star
+                                    key={s}
+                                    className={`w-3 h-3 ${s <= review.rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-200'}`}
                                   />
                                 ))}
                               </div>
@@ -437,7 +446,7 @@ export default function MentorProfilePage({ params }: { params: Promise<{ id: st
               <p className="text-sm text-gray-600 mb-4">
                 Book a 1-on-1 session with {mentor.full_name}
               </p>
-              
+
               <Link href={`/book-session/${mentor.id}`}>
                 <button className="w-full bg-orange-500 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-orange-600 transition">
                   Book a Session
@@ -470,10 +479,10 @@ export default function MentorProfilePage({ params }: { params: Promise<{ id: st
               >
                 Message Mentor
               </button>
-
             </div>
           </div>
         </div>
+        {isReportOpen && <ReportModal isOpen={isReportOpen} onClose={() => setIsReportOpen(false)} reportedUserId={mentor.user_id} reportedUserName={mentor.full_name} />}
       </div>
     </AuthLayout>
   );

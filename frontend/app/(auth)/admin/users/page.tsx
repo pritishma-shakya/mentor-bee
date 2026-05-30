@@ -11,7 +11,7 @@ interface User {
   email: string;
   role: "student" | "mentor" | "admin";
   profile_picture?: string;
-  status?: string;
+  status?: "pending" | "accepted" | "rejected" | "suspended" | "banned" | "warned";
   avg_rating?: string;
   created_at?: string;
   verified_at?: string;

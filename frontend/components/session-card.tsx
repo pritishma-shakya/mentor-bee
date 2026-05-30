@@ -16,7 +16,9 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import ReviewModal from "./review-modal";
+import { ReportModal } from "./report-modal";
 import { isSessionActive } from "@/utils/dateUtils";
+import { Flag } from "lucide-react";
 
 interface Session {
   id: string;
@@ -65,6 +67,7 @@ export default function SessionCard({ session, user, onCancel, onRespond }: Sess
   const [expanded, setExpanded] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
   const [hasReviewed, setHasReviewed] = useState(session.has_review || false);
 
   // Helper to get correct image URL
@@ -156,6 +159,13 @@ export default function SessionCard({ session, user, onCancel, onRespond }: Sess
             Rate Session
           </button>
         )}
+
+        <button
+          onClick={() => setShowReportModal(true)}
+          className={`${isExpanded ? 'px-4 py-2 text-sm' : 'px-4 py-1.5 text-[11px]'} text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg font-medium transition flex items-center gap-2 border border-transparent hover:border-red-100`}
+        >
+          <Flag className={isExpanded ? "w-4 h-4" : "w-3.5 h-3.5"} /> Report
+        </button>
       </div>
     );
   };
@@ -336,6 +346,13 @@ export default function SessionCard({ session, user, onCancel, onRespond }: Sess
         sessionId={session.id}
         mentorName={session.mentor_name || "Mentor"}
         onSuccess={() => setHasReviewed(true)}
+      />
+
+      <ReportModal
+        isOpen={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        reportedUserId={session.mentor_user_id || ""}
+        reportedUserName={session.mentor_name || "Mentor"}
       />
     </div>
   );

@@ -115,17 +115,14 @@ export const validatePromoCode = async (req: AuthRequest, res: Response) => {
             return res.status(404).json({ success: false, message: "Invalid or expired promo code" });
         }
 
-        // Check expiry
         if (promo.expiry_date && new Date(promo.expiry_date) < new Date()) {
             return res.status(400).json({ success: false, message: "Promo code has expired" });
         }
 
-        // Check usage limit
         if (promo.usage_limit && promo.usage_count >= promo.usage_limit) {
             return res.status(400).json({ success: false, message: "Promo code usage limit reached" });
         }
 
-        // Check if mentor-specific
         if (promo.mentor_id && mentorId && promo.mentor_id !== mentorId) {
             return res.status(400).json({ success: false, message: "This code is not valid for this mentor" });
         }
@@ -149,7 +146,7 @@ export const getMentorActivePromoCodes = async (req: AuthRequest, res: Response)
     const { mentorId } = req.params;
 
     try {
-        // We first need to get the user_id for this mentor.id
+        
         const { rows: mentorRows } = await pgPool.query("SELECT user_id FROM mentors WHERE id = $1", [mentorId]);
         const userId = mentorRows[0]?.user_id;
 
@@ -182,11 +179,10 @@ export const deletePromoCode = async (req: AuthRequest, res: Response) => {
         let params = [id];
 
         if (role === 'mentor') {
-            // Mentor can only delete their own codes
+            
             query += " AND created_by = $2";
             params.push(userId);
         }
-        // Admin can delete any code
 
         const { rowCount } = await pgPool.query(query, params);
 
